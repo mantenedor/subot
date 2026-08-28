@@ -38,17 +38,18 @@ hosts:
     tags: []
     identity_file: null
 
-  # "Console da IA": host 'ssh' apontando para a VM onde o próprio subot roda (endereço
-  # alcançável pelo container guacd na rede subot_net — nunca 'localhost'/'127.0.0.1'). Usado
-  # com a MCP tool remote_desktop_connector.open_desktop_session(host="subot-console",
-  # ssh_username=..., ssh_password=..., ssh_command="docker exec -it subot-agent-1 bash") para
-  # criar uma conexão Guacamole que cai direto dentro do container subot-agent-1 — sem precisar
-  # rodar sshd dentro dele (exigiria root, contra o hardening do container). Usa o sshd que já
-  # existe na VM; as credenciais SSH ficam só no banco do Guacamole, não em arquivo nenhum aqui.
+  # "Console da IA": SSH direto pro container 'agent', só pela rede docker interna (subot_net) —
+  # 'agent' é o nome do serviço no compose, resolvido via DNS interno do Docker; nunca sai pra
+  # rede da VM. Um dropbear roda em background dentro do agent, na porta 2222, autenticação só
+  # por chave (secrets/ssh/guac_console_ed25519, gerada por scripts/setup.sh — sem passphrase de
+  # propósito, o alcance dessa chave já é limitado a "dentro do subot_net"). Use com:
+  # remote_desktop_connector.open_desktop_session(host="subot-console", ssh_username="subot",
+  # ssh_private_key="<conteúdo de secrets/ssh/guac_console_ed25519>") — cai direto num shell
+  # dentro do container 'agent', sem precisar de 'docker exec' nem tocar a rede/sshd da VM.
   subot-console:
-    address: 10.0.0.99
-    port: 22
-    user: root
+    address: agent
+    port: 2222
+    user: subot
     protocol: ssh
     groups: [subot-self]
     tags: []

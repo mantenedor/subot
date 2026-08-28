@@ -24,6 +24,25 @@ else
     echo "[subot-agent] AVISO: nenhuma chave do bastiao em $SSH_DIR/bastion_id_ed25519 — rode scripts/setup.sh no host primeiro."
 fi
 
+# Console SSH do agent, só pela rede docker interna (subot_net) — sem porta publicada no host,
+# autenticação só por chave (dropbear -s desliga login por senha). A chave pública vem de
+# secrets/ssh/guac_console_ed25519.pub (gerada por scripts/setup.sh); a privada correspondente é
+# o que o Guacamole usa pra abrir a sessão (ver mcp-servers/remote_desktop_connector).
+mkdir -p /home/subot/.ssh
+chmod 700 /home/subot/.ssh
+if [ -f "$SSH_DIR/guac_console_ed25519.pub" ]; then
+    cp "$SSH_DIR/guac_console_ed25519.pub" /home/subot/.ssh/authorized_keys
+    chmod 600 /home/subot/.ssh/authorized_keys
+    HOST_KEY=/home/subot/.ssh/dropbear_ed25519_host_key
+    if [ ! -f "$HOST_KEY" ]; then
+        dropbearkey -t ed25519 -f "$HOST_KEY" >/dev/null 2>&1
+    fi
+    echo "[subot-agent] iniciando console SSH em background (dropbear, porta 2222, só pela rede docker)"
+    dropbear -F -E -p 2222 -r "$HOST_KEY" -s &
+else
+    echo "[subot-agent] AVISO: secrets/ssh/guac_console_ed25519.pub nao encontrada — console SSH nao iniciado. Rode scripts/setup.sh no host primeiro."
+fi
+
 mkdir -p "${OLLAMA_MODELS:-/home/subot/.ollama}"
 echo "[subot-agent] iniciando Ollama em background (127.0.0.1:11434)"
 ollama serve &

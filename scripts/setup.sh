@@ -62,6 +62,22 @@ fi
 
 touch secrets/ssh/known_hosts
 
+CONSOLE_KEY="secrets/ssh/guac_console_ed25519"
+if [ ! -f "$CONSOLE_KEY" ]; then
+    echo "==> gerando par de chaves do console SSH (Guacamole -> container agent, via rede docker)"
+    # Sem passphrase de propósito: essa chave só abre uma sessão dropbear que só existe dentro da
+    # rede subot_net (nunca publicada no host) e cujo alcance já é limitado a "quem consegue
+    # autenticar no Guacamole e abrir essa conexão" — diferente da chave do bastião, que sai pra
+    # infraestrutura gerenciada de verdade e por isso é protegida por passphrase.
+    ssh-keygen -t ed25519 -f "$CONSOLE_KEY" -N "" -C "subot-guac-console"
+    chmod 600 "$CONSOLE_KEY"
+    chmod 644 "${CONSOLE_KEY}.pub"
+    echo "    chave pronta — use mcp-servers/remote_desktop_connector para criar a conexão no"
+    echo "    Guacamole (host 'subot-console' -> agent:2222, ver config/hosts.yaml.example)"
+else
+    echo "==> chave do console SSH já existe, mantendo como está"
+fi
+
 if [ ! -f containers/guacamole/initdb/01-initdb.sql ]; then
     echo "==> gerando schema do banco do Guacamole"
     docker run --rm guacamole/guacamole:1.5.5 /opt/guacamole/bin/initdb.sh --postgresql \

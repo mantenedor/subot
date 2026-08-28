@@ -25,6 +25,7 @@ def open_desktop_session(
     host: str,
     ssh_username: str | None = None,
     ssh_password: str | None = None,
+    ssh_private_key: str | None = None,
     ssh_command: str | None = None,
 ) -> str:
     """Garante que existe uma conexão Guacamole para o host do inventário informado (protocolo
@@ -32,13 +33,13 @@ def open_desktop_session(
     humano de fato clique no link e interaja com a sessão — esta tool não controla a sessão em
     si, só cria/reaproveita a conexão no Guacamole.
 
-    Para host com protocolo 'ssh', informe ssh_username (obrigatório) e ssh_password (opcional —
-    omita para autenticação sem senha/por chave já configurada do lado do servidor). ssh_command
-    é opcional e substitui o shell padrão por um comando específico ao conectar — é assim que se
-    configura o "console da IA": um host 'ssh' apontando para a própria VM, com ssh_command
-    'docker exec -it subot-agent-1 bash', faz o Guacamole cair direto dentro do container
-    subot-agent-1 (sem precisar rodar sshd dentro dele, o que exigiria root e contrariaria o
-    hardening do container).
+    Para host com protocolo 'ssh', informe ssh_username (obrigatório) e ssh_password OU
+    ssh_private_key (conteúdo da chave privada, formato OpenSSH — preferível a senha; é assim que
+    o "console da IA" é montado: host 'subot-console' apontando pro serviço 'agent' na rede
+    docker, porta 2222, usuário 'subot', com a chave privada de secrets/ssh/guac_console_ed25519,
+    gerada por scripts/setup.sh). ssh_command é opcional, substitui o shell padrão por um comando
+    específico ao conectar (não é necessário pro console da IA — a sessão já cai direto num shell
+    dentro do container 'agent', sem precisar de 'docker exec').
 
     Essas credenciais NÃO são salvas em hosts.yaml nem em nenhum arquivo do subot — são passadas
     direto ao Guacamole na criação da conexão; a partir daí é o próprio Guacamole (seu banco
@@ -54,9 +55,11 @@ def open_desktop_session(
     if match is None:
         if inv_host.protocol == "ssh":
             if not ssh_username:
-                return "protocolo 'ssh' exige o argumento 'ssh_username' (ssh_password/ssh_command são opcionais)"
+                return "protocolo 'ssh' exige o argumento 'ssh_username' (ssh_password/ssh_private_key/ssh_command são opcionais)"
             parameters = {"hostname": inv_host.address, "port": str(inv_host.port), "username": ssh_username}
-            if ssh_password:
+            if ssh_private_key:
+                parameters["private-key"] = ssh_private_key
+            elif ssh_password:
                 parameters["password"] = ssh_password
             if ssh_command:
                 parameters["command"] = ssh_command
@@ -65,7 +68,7 @@ def open_desktop_session(
 
         created = guac.create_connection(name=host, protocol=inv_host.protocol, parameters=parameters)
         match = created["identifier"]
-        # nunca logar ssh_password — só metadados não sensíveis vão pro audit
+        # nunca logar ssh_password/ssh_private_key — só metadados não sensíveis vão pro audit
         audit.record("guac_create_connection", actor="mcp:remote_desktop_connector", risk="sensitive",
                      status="executed", detail={"host": host, "connection_id": match, "protocol": inv_host.protocol,
                                                  "command": ssh_command})

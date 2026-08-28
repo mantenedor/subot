@@ -15,12 +15,14 @@
 # Variáveis de ambiente que ajustam o comportamento (opcional):
 #   SUBOT_REPO_URL   URL do repositório git (default: aponte para o seu fork/org antes de publicar)
 #   SUBOT_REPO_REF   branch/tag a clonar (default: main)
-#   SUBOT_INSTALL_DIR diretório de destino (default: $HOME/subot)
+#   SUBOT_INSTALL_DIR diretório de destino (default: ./subot, dentro do diretório onde o
+#                      instalador foi executado — não $HOME, para respeitar 'cd /algum/lugar &&
+#                      curl ... | bash')
 set -euo pipefail
 
 REPO_URL="${SUBOT_REPO_URL:-https://github.com/mantenedor/subot.git}"
 REPO_REF="${SUBOT_REPO_REF:-main}"
-INSTALL_DIR="${SUBOT_INSTALL_DIR:-$HOME/subot}"
+INSTALL_DIR="${SUBOT_INSTALL_DIR:-$PWD/subot}"
 
 log() { printf '==> %s\n' "$1"; }
 require_cmd() { command -v "$1" >/dev/null 2>&1; }

@@ -158,17 +158,23 @@ reavaliar o dimensionamento nesse momento em vez de superdimensionar CPU/RAM hoj
 
 ## Deploy em uma VM nova (um comando)
 
+Rode a partir do diretório onde você quer manter o projeto (ex.: `/opt`) — o instalador cria
+`./subot` **dentro do diretório de execução**, não em `$HOME`:
+
 ```bash
+cd /opt   # ou onde preferir manter o projeto
 curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/install.sh | bash
 ```
 
-Se em algum momento o repositório voltar a ser privado, buscar o `install.sh` e o `git clone`
-interno dele passam a exigir credencial — ver comentário no topo de `install.sh`.
+Isso deixa a ferramenta em `/opt/subot`. Se em algum momento o repositório voltar a ser privado,
+buscar o `install.sh` e o `git clone` interno dele passam a exigir credencial — ver comentário no
+topo de `install.sh`.
 
 O `install.sh` faz o resto: checa/instala Docker, clona o repositório, roda `scripts/setup.sh` e
-sobe a stack. É idempotente — rodar de novo atualiza (`git pull`) em vez de duplicar, e nunca
-sobrescreve `.env`/`secrets/`/`config/hosts.yaml` já existentes. Ajustável via `SUBOT_REPO_URL`,
-`SUBOT_REPO_REF` e `SUBOT_INSTALL_DIR`.
+sobe a stack. É idempotente — rodar de novo (no mesmo diretório) atualiza (`git pull`) em vez de
+duplicar, e nunca sobrescreve `.env`/`secrets/`/`config/hosts.yaml` já existentes. Ajustável via
+`SUBOT_REPO_URL`, `SUBOT_REPO_REF` e `SUBOT_INSTALL_DIR` (esta última sobrescreve o destino padrão
+`./subot`, aceitando um caminho absoluto se quiser instalar em outro lugar independente do `cd`).
 
 Restaurando uma instância existente numa VM nova? Rode o `install.sh` acima primeiro (traz a
 ferramenta do zero), depois `docker compose down`, `bash scripts/restore.sh <backup.tar.gz>` e

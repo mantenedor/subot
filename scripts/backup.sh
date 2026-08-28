@@ -31,3 +31,18 @@ echo "    contém: ${ARGS[*]}"
 if $EXCLUDE_SECRETS; then
     echo "    (secrets/ excluído — este arquivo sozinho NÃO é suficiente para restaurar acesso SSH/TLS)"
 fi
+
+echo ""
+echo "    #################################################################"
+echo "    # ATENÇÃO — a passphrase da chave SSH do bastião NÃO está neste"
+echo "    # backup (de propósito — nunca fica salva em arquivo nenhum)."
+echo "    # Sem ela guardada em algum lugar (gerenciador de senha, cofre da"
+echo "    # empresa), restaurar este backup numa VM nova te dá a chave"
+echo "    # cifrada de volta, mas SEM COMO ABRI-LA — perda permanente de"
+echo "    # acesso SSH, só resolve regenerando e redistribuindo uma chave"
+echo "    # nova pra todos os hosts gerenciados."
+echo "    #"
+echo "    # Se ainda não guardou a passphrase que apareceu quando a chave"
+echo "    # foi gerada (scripts/setup.sh ou rotate-ssh-keys.sh), faça isso"
+echo "    # AGORA, antes deste backup ser a sua única cópia."
+echo "    #################################################################"

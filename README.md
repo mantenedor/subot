@@ -118,11 +118,23 @@ Toda ação sobre um host gerenciado passa por `packages/subot_core`:
 7. **A chave privada SSH do bastião é protegida por passphrase** (AES, formato nativo do
    OpenSSH/paramiko) — o arquivo em `secrets/ssh/` nunca é texto plano utilizável sozinho, mesmo
    que alguém tenha acesso de leitura ao disco do host. A passphrase é gerada por
-   `scripts/setup.sh`, mostrada uma única vez no terminal e nunca é salva em nenhum arquivo —
-   você precisa exportá-la (`SUBOT_SSH_KEY_PASSPHRASE`) antes de cada `docker compose up`. Isso
-   protege contra disco/backup roubado; não protege contra alguém com root no host que decide
-   entrar no container em execução (`docker exec`) — nenhuma configuração de container consegue
-   evitar isso, é uma limitação de qualquer coisa rodando no mesmo kernel do host.
+   `scripts/setup.sh`, mostrada uma única vez no terminal e **nunca é salva em nenhum arquivo**
+   (nem em `.env`, nem no backup). Isso protege contra disco/backup roubado; não protege contra
+   alguém com root no host que decide entrar no container em execução (`docker exec`) — nenhuma
+   configuração de container consegue evitar isso, é limitação de qualquer coisa rodando no mesmo
+   kernel do host.
+
+   Precisa reexportar `SUBOT_SSH_KEY_PASSPHRASE` só quando o container é **recriado**
+   (`docker compose down && up`, `--force-recreate`, instalação nova) — um reboot simples da VM
+   com `docker restart`/`restart: unless-stopped` reaproveita a configuração já gravada no
+   container e não exige nada.
+
+   **Risco operacional que você precisa aceitar conscientemente**: como a passphrase nunca é
+   persistida, ela também **não entra em `scripts/backup.sh`**. Se você não guardá-la em algum
+   lugar durável (gerenciador de senhas, cofre da organização) no momento em que ela aparece,
+   restaurar o backup numa VM nova devolve a chave cifrada **sem nenhuma forma de abri-la** — a
+   única saída nesse caso é gerar uma chave nova e redistribuir a chave pública para todos os
+   hosts gerenciados. `scripts/backup.sh` e `scripts/restore.sh` avisam isso a cada execução.
 
 ## Dimensionamento de VM (CPU-only, escala pequena)
 

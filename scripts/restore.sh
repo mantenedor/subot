@@ -15,4 +15,10 @@ read -r -p "Digite 'yes' para continuar: " CONFIRM
 [ "$CONFIRM" = "yes" ] || { echo "abortado"; exit 1; }
 
 tar -xzf "$ARCHIVE"
-echo "==> restaurado a partir de ${ARCHIVE}. Rode 'docker compose up -d' para religar a stack."
+echo "==> restaurado a partir de ${ARCHIVE}."
+echo ""
+echo "    LEMBRETE: a chave SSH restaurada em secrets/ssh/ está protegida por passphrase, e essa"
+echo "    passphrase NÃO veio no backup. Exporte-a antes de subir a stack:"
+echo "      export SUBOT_SSH_KEY_PASSPHRASE='<passphrase guardada externamente>'"
+echo "      docker compose up -d"
+echo "    Sem isso os containers sobem, mas toda operação SSH falha."

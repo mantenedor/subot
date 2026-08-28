@@ -17,3 +17,8 @@ description: Faz backup ou restauração dos volumes persistidos do subot (confi
   restaurar para evitar escrita concorrente.
 - Nunca restaure por cima de dados de produção sem antes confirmar que existe um backup do estado
   atual.
+- **A passphrase da chave SSH do bastião nunca está no backup** (nunca é persistida em arquivo
+  nenhum, de propósito). Antes de tratar um backup como "completo", confirme com o operador humano
+  que ele guardou essa passphrase em algum lugar durável (gerenciador de senhas, cofre da
+  organização) — sem ela, a chave restaurada fica permanentemente inutilizável e a única saída é
+  gerar uma chave nova e redistribuir a pública para todos os hosts gerenciados.

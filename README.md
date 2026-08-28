@@ -285,3 +285,10 @@ subot/
   interativo — a arquitetura já suporta isso via `subot_orchestrator`, mas nenhum foi integrado
   nesta primeira entrega.
 - GPU passthrough para o Ollama — ver nota de dimensionamento acima.
+
+## Licença
+
+[PolyForm Noncommercial License 1.0.0](LICENSE) — uso livre para qualquer propósito
+**não-comercial** (pessoal, pesquisa, estudo, organizações sem fins lucrativos, educacionais, de
+saúde pública, ambientais ou governamentais). Uso comercial não é permitido sob esta licença. Este
+não é um aconselhamento jurídico — para dúvidas sobre um uso específico, consulte um advogado.

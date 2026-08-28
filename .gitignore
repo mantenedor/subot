@@ -2,8 +2,14 @@
 # ferramenta; tudo aqui é "insumo de ambiente" e vive exclusivamente nos backups gerados por
 # scripts/backup.sh (ver README, seção "Repositório vs. dados de ambiente"). ----
 
-# chaves SSH, TLS, credenciais do proxy
-secrets/**
+# chaves SSH, TLS, credenciais do proxy. NOTA: 'secrets/**' sozinho com uma negação de arquivo
+# aninhado (ex.: '!secrets/ssh/README.md') NÃO funciona em gitignore — negação não resgata um
+# arquivo cujo diretório pai já foi excluído por um padrão recursivo. Por isso a re-inclusão do
+# README é feita nível a nível, com globs de um nível só (*), nunca recursivos (**), pra não correr
+# o risco de acidentalmente destravar a chave privada junto.
+secrets/*
+!secrets/ssh
+secrets/ssh/*
 !secrets/ssh/README.md
 
 # volumes persistidos (bancos, gravações, auditoria, modelos, home do agente)

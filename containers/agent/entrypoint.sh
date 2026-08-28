@@ -24,5 +24,12 @@ else
     echo "[subot-agent] AVISO: nenhuma chave do bastiao em $SSH_DIR/bastion_id_ed25519 — rode scripts/setup.sh no host primeiro."
 fi
 
+mkdir -p "${OLLAMA_MODELS:-/home/subot/.ollama}"
+echo "[subot-agent] iniciando Ollama em background (127.0.0.1:11434)"
+ollama serve &
+
+echo "[subot-agent] iniciando API REST em background (porta 8081)"
+(cd /opt/subot && exec uvicorn app.main:app --host 0.0.0.0 --port 8081) &
+
 echo "[subot-agent] pronto. Servidores MCP registrados em .claude/settings.json; CLI do orquestrador disponivel como 'subot'."
 exec "$@"

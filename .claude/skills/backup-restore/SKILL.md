@@ -6,7 +6,7 @@ description: Faz backup ou restauração dos volumes persistidos do subot (confi
 # backup-restore
 
 - Backup: rode `bash scripts/backup.sh` (a partir da raiz do projeto, no host ou dentro do
-  container `subot-agent`). Gera um `.tar.gz` versionado por timestamp em `./backups/`, cobrindo
+  container `subot-agent-1`). Gera um `.tar.gz` versionado por timestamp em `./backups/`, cobrindo
   `./data`, `.env`, `config/hosts.yaml` e `./secrets` (chaves SSH, TLS, credencial do proxy) — é o
   backup completo de tudo que o repositório git *não* contém (ver README, "Repositório vs. dados
   de ambiente"). Use `--exclude-secrets` só se for transportar o arquivo por um canal onde prefere

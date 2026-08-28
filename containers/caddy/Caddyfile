@@ -1,0 +1,38 @@
+# Único ponto de entrada público do subot. Caddy cuida de TLS sozinho: com um domínio público de
+# verdade em SUBOT_DOMAIN, emite e renova certificado Let's Encrypt automaticamente (sem certbot,
+# sem scripts de bootstrap); com 'localhost' ou um IP (sem domínio ainda), usa automaticamente um
+# certificado da CA interna do próprio Caddy — o navegador avisa que não é confiável, é esperado,
+# aceite o risco pra testar localmente até ter um domínio real.
+#
+# {$VAR:default} é resolvido pelo próprio Caddy a partir das variáveis de ambiente do container —
+# não precisa de sed/entrypoint customizado como no Apache antes.
+{
+	email {$SUBOT_LETSENCRYPT_EMAIL}
+}
+
+{$SUBOT_DOMAIN:localhost} {
+	# Guacamole — único serviço pensado para acesso público direto. A autenticação de verdade
+	# acontece no próprio Guacamole (usuário/senha, recomenda-se habilitar TOTP — ver README).
+	# 'handle' blocks são mutuamente exclusivos e o Caddy os ordena por especificidade sozinho
+	# (mais específico primeiro), então não importa a ordem em que aparecem aqui — mas por
+	# clareza, e pra nunca depender dessa regra implícita, todo path fica em um handle explícito.
+	handle /guacamole* {
+		reverse_proxy guacamole:8080
+	}
+
+	# API — desligada do público por padrão (comente o bloco pra desabilitar de vez). Protegida
+	# por Basic Auth (hash gerado em scripts/setup.sh) como segunda camada, além da confirmação
+	# em duas etapas que o subot_core já exige pra qualquer ação sensível. Roda dentro do
+	# container 'agent' agora (não é mais um container separado).
+	handle /api* {
+		basicauth {
+			{$SUBOT_API_BASIC_AUTH_USER} {$SUBOT_API_BASIC_AUTH_HASH}
+		}
+		uri strip_prefix /api
+		reverse_proxy agent:8081
+	}
+
+	handle / {
+		redir / /guacamole/ 307
+	}
+}

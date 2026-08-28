@@ -54,22 +54,39 @@ Trocar a IA por trás de um agente é editar um campo no front matter — não u
 
 ## Arquitetura
 
+**5 containers** — deliberadamente poucos. `postgres`/`guacd`/`guacamole` são o preço de manter o
+Guacamole (a camada de acesso via navegador); Ollama e a API REST rodam **dentro** do container
+`agent`, como processos em background, em vez de containers próprios — ver a nota "por que 5, não
+8" logo abaixo.
+
 | Serviço | Papel |
 |---|---|
-| `guac-db` | Banco Postgres do Guacamole |
-| `guacd` | Daemon proxy do Guacamole (RDP/VNC/SSH) |
+| `guac-db` | Banco Postgres do Guacamole (usuários, conexões, histórico) |
+| `guacd` | Daemon proxy do Guacamole (fala RDP/VNC/SSH de verdade) |
 | `guacamole` | Gateway web HTML5 — GUI remota, com gravação de sessão nativa (sem porta publicada) |
-| `ollama` | Motor de inferência **local** padrão dos agentes |
-| `subot-agent` | Claude Code + `subot_orchestrator` + servidores MCP (sem porta publicada) |
-| `subot-api` | API REST espelhando as mesmas operações, agnóstica de IA (sem porta publicada) |
-| `reverse-proxy` | Apache — **único** container que publica portas no host (80/443); termina TLS |
-| `certbot` | Renovação automática do certificado Let's Encrypt |
+| `agent` (container `subot-agent-1`) | Claude Code + `subot_orchestrator` + servidores MCP + **Ollama** (processo em background) + **API REST** (processo em background) — o "cérebro" único da stack (sem porta publicada) |
+| `caddy` | **Único** container que publica portas no host (80/443); termina TLS sozinho (Let's Encrypt automático, ou certificado local se não houver domínio) |
 
-Todos na rede dedicada `subot_net`. `subot-agent` e `subot-api` compartilham a mesma lógica de
-segurança (`packages/subot_core`) — nenhum caminho de execução (MCP, CLI, REST) contorna a
-política. `guacamole` e `subot-api` não são mais publicadas diretamente no host: só são
-alcançáveis através do `reverse-proxy` ou de dentro da rede `subot_net` — reduz a superfície de
-ataque de um bastião de infraestrutura a um único ponto de entrada público auditável.
+Todos na rede dedicada `subot_net`. `guacamole` e a API (dentro do `agent`) não são publicadas
+diretamente no host: só são alcançáveis através do `caddy` ou de dentro da rede `subot_net` —
+reduz a superfície de ataque de um bastião de infraestrutura a um único ponto de entrada público
+auditável.
+
+**Por que 5 containers, não 8**: a primeira versão deste projeto tinha `ollama`, `api` e
+`reverse-proxy`+`certbot` como containers próprios. Revisão de escopo: Ollama e a API REST viraram
+processos em background dentro do `agent` (menos isolamento de restart/memória entre eles, custo
+aceito conscientemente — se um crashar, `docker compose restart agent` religa os três juntos), e
+Apache+certbot viraram Caddy (HTTPS automático nativo, sem scripts de bootstrap). O Postgres do
+Guacamole **foi mantido** — é o que permite a tool `remote_desktop_connector` criar conexões
+RDP/VNC/SSH dinamicamente via API; a alternativa sem banco (`user-mapping.xml` estático) cortaria
+mais 1 container mas tiraria essa capacidade.
+
+**Nome de serviço vs. nome de container**: nos comandos (`docker compose exec/logs/ps <serviço>`)
+use o nome curto da tabela (`agent`, `caddy`). No `docker ps`, o Docker Compose mostra o nome
+completo do container, `<projeto>-<serviço>-<réplica>` — como o projeto já se chama `subot`, os
+containers aparecem como `subot-agent-1`, `subot-guacamole-1` etc. É o mesmo container, só
+nomeado de forma diferente pelas duas ferramentas — `docker exec` (fora do compose) precisa do
+nome completo (`subot-agent-1`), `docker compose exec` aceita o nome curto do serviço (`agent`).
 
 ## Controles de segurança
 
@@ -128,10 +145,10 @@ o dimensionamento são (1) os modelos locais carregados no Ollama e (2) a codifi
 
 Como cheguei nesses números:
 
-- **Plano de controle** (`guac-db` + `guacd` + `guacamole` + `subot-agent` + `subot-api` +
-  `reverse-proxy` + `certbot` + overhead de SO/Docker): ~4–5 vCPU em pico, ~6–7 GB RAM. Leve na
-  maior parte do tempo — o `guacd` é quem mais varia, porque cada sessão RDP/VNC ativa com
-  atividade gráfica normal consome algo entre 0,3–0,8 vCPU só para codificar vídeo.
+- **Plano de controle** (`guac-db` + `guacd` + `guacamole` + `caddy` + overhead de SO/Docker,
+  excluindo Ollama): ~3–4 vCPU em pico, ~4–5 GB RAM. Leve na maior parte do tempo — o `guacd` é
+  quem mais varia, porque cada sessão RDP/VNC ativa com atividade gráfica normal consome algo
+  entre 0,3–0,8 vCPU só para codificar vídeo.
 - **Ollama (CPU-only)** é o item que mais pesa: com os defaults já ajustados neste projeto para
   CPU (`qwen2.5:14b` no `infra-operator`, `qwen2.5:7b` no `stack-maintainer` — ver
   `config/providers.yaml` e `agents/*.md`), cada modelo carregado ocupa ~10–12 GB (14b) ou ~5–6 GB
@@ -178,7 +195,7 @@ se detectar uma instalação/containers do subot já no ar — e nesse caso só 
 [Enter] atualizar e continuar (padrão)
   r      reinstalar do zero (apaga tudo e clona de novo — pede confirmação)
   b      restaurar de um backup
-  a      configurar só o Apache/HTTPS (Let's Encrypt)
+  a      configurar domínio/HTTPS (Caddy — Let's Encrypt automático)
 ```
 
 Sem terminal interativo (ex.: rodando em CI), assume `[Enter]` (atualizar) automaticamente.
@@ -197,33 +214,23 @@ bash scripts/pull-models.sh    # baixa os modelos locais default no Ollama (qwen
 python3 scripts/sync-claude-agents.py   # projeta agents/*.md -> .claude/agents/*.md
 ```
 
-Neste ponto o `reverse-proxy` fica reiniciando em loop (`restart: unless-stopped`) — ele não sobe
-sem *algum* certificado em `SSLCertificateFile`, e ainda não existe nenhum. Isso não afeta os
-outros serviços (guacamole, subot-api e subot-agent funcionam normalmente por trás dele; só não
-dá pra acessá-los de fora ainda, já que só o `reverse-proxy` publica porta no host). Resolva com
-um dos dois:
+Sem `SUBOT_DOMAIN` preenchido em `.env`, o `caddy` sobe imediatamente com um certificado da sua
+própria CA interna (não precisa de nenhum passo extra) — dá pra acessar já, com aviso de
+certificado não confiável no navegador (esperado, é local). Preenchendo `SUBOT_DOMAIN` e
+`SUBOT_LETSENCRYPT_EMAIL` em `.env` (com o DNS já apontando pra esta VM) e subindo o `caddy` de
+novo (`docker compose up -d caddy`), ele emite e renova um certificado Let's Encrypt de verdade
+sozinho — sem certbot, sem script de bootstrap.
 
-```bash
-# Já tem domínio com DNS apontando pra esta VM (produção):
-# preencha SUBOT_DOMAIN e SUBOT_LETSENCRYPT_EMAIL em .env
-bash scripts/init-letsencrypt.sh
-
-# Ainda não tem domínio, só quer testar localmente (gera certificado autoassinado — o navegador
-# vai avisar que não é confiável, é esperado; troque pelo Let's Encrypt acima quando tiver domínio):
-bash scripts/self-signed-cert.sh
-```
-
-- GUI (Guacamole): `https://SEU_DOMINIO/guacamole/` (usuário/senha em `.env`,
+- GUI (Guacamole): `https://SEU_DOMINIO_OU_IP/guacamole/` (usuário/senha em `.env`,
   `GUACAMOLE_ADMIN_USER`/`GUACAMOLE_ADMIN_PASSWORD`, default `guacadmin`/`guacadmin` — troque
   depois do primeiro login; **habilite TOTP na conta admin do Guacamole** antes de considerar isso
   pronto para produção pública — é a autenticação real do sistema, o proxy não substitui isso).
-- API REST: `https://SEU_DOMINIO/api/` — atrás de Basic Auth (usuário `SUBOT_API_BASIC_AUTH_USER`,
-  senha gerada por `scripts/setup.sh` em `secrets/reverse-proxy/htpasswd-password.txt`), além da
-  confirmação em duas etapas que o `subot_core` já exige para qualquer ação sensível. Comente o
-  bloco `<Location "/api/">` em `containers/reverse-proxy/httpd.conf.template` se preferir não
-  expor a API publicamente de forma alguma.
-- CLI/Claude Code: `docker compose exec -it subot-agent bash`, depois `subot agent list` ou
-  `claude`.
+- API REST: `https://SEU_DOMINIO_OU_IP/api/` — atrás de Basic Auth (usuário
+  `SUBOT_API_BASIC_AUTH_USER`, senha gerada por `scripts/setup.sh` em
+  `secrets/caddy/api-password.txt`), além da confirmação em duas etapas que o `subot_core` já
+  exige para qualquer ação sensível. Comente o bloco `handle /api*` em
+  `containers/caddy/Caddyfile` se preferir não expor a API publicamente de forma alguma.
+- CLI/Claude Code: `docker compose exec -it agent bash`, depois `subot agent list` ou `claude`.
 
 ### Segurança na exposição pública
 
@@ -234,9 +241,9 @@ do Basic Auth já configurados no proxy:
   oficial via variáveis de ambiente — ver docs do Guacamole) assim que possível.
 - Considere restringir o firewall da VM para liberar 80/443 apenas de IPs/ranges conhecidos, se o
   conjunto de operadores for previsível.
-- Instale `fail2ban` no **host** (fora do Docker) observando os logs de acesso do `reverse-proxy`
-  (`docker compose logs reverse-proxy`) e do próprio Guacamole, para banir IPs com tentativas de
-  login repetidas.
+- Instale `fail2ban` no **host** (fora do Docker) observando os logs de acesso do `caddy`
+  (`docker compose logs caddy`) e do próprio Guacamole, para banir IPs com tentativas de login
+  repetidas.
 - Revise `./data/audit/*.jsonl` e as gravações de sessão em `./data/guac-recordings` com
   regularidade (a skill `incident-review` ajuda nisso).
 
@@ -264,7 +271,7 @@ chave correspondente em `.env`.
 ## Delegação multi-agente
 
 ```bash
-docker compose exec subot-agent subot delegate \
+docker compose exec agent subot delegate \
     "stack-maintainer=faça um health check" \
     "security-auditor=revise o log de auditoria das últimas 24h"
 ```
@@ -276,7 +283,7 @@ Cada agente roda no provider/model do seu próprio `agents/*.md`, em paralelo.
 ```
 subot/
 ├── docker-compose.yml
-├── containers/{agent,api,reverse-proxy}/   # Dockerfiles/entrypoints + config do Apache
+├── containers/{agent,caddy}/           # Dockerfile/entrypoint do agent (Claude Code+Ollama+API) + Caddyfile
 ├── packages/
 │   ├── subot_core/                    # segurança: inventory, policy, confirm, audit, ssh, secrets, guac_client
 │   └── subot_orchestrator/            # multi-IA: providers, agent_loader, mcp_client, runner, delegator, cli
@@ -288,7 +295,7 @@ subot/
 ├── data/                              # NUNCA versionado — todos os volumes, como diretórios do host
 ├── install.sh                         # instalador de um comando (curl | bash) para VM nova
 └── scripts/                           # setup, pull-models, sync, backup, restore, rotação de chaves,
-                                        # healthcheck, init-letsencrypt
+                                        # healthcheck
 ```
 
 ## Fora de escopo (próximos passos)
@@ -298,7 +305,10 @@ subot/
 - Testes de integração ponta-a-ponta automatizados.
 - SSO/LDAP no Guacamole.
 - Segmentação em múltiplas redes Docker (hoje é uma rede única `subot_net`; o isolamento público
-  vem de só o `reverse-proxy` publicar portas, não de segmentação de rede).
+  vem de só o `caddy` publicar portas, não de segmentação de rede).
+- Guacamole sem banco (`user-mapping.xml`) — cortaria o container `guac-db`, mas tiraria a
+  criação dinâmica de conexão via `remote_desktop_connector` (decisão consciente de manter o
+  banco — ver seção Arquitetura).
 - UI web própria para gestão dos agentes (v1 usa CLI/API/Guacamole).
 - Outros CLIs de agente de código (aider, opencode, etc.) além do Claude Code como driver
   interativo — a arquitetura já suporta isso via `subot_orchestrator`, mas nenhum foi integrado

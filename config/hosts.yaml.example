@@ -41,8 +41,8 @@ hosts:
   # "Console da IA": host 'ssh' apontando para a VM onde o próprio subot roda (endereço
   # alcançável pelo container guacd na rede subot_net — nunca 'localhost'/'127.0.0.1'). Usado
   # com a MCP tool remote_desktop_connector.open_desktop_session(host="subot-console",
-  # ssh_username=..., ssh_password=..., ssh_command="docker exec -it subot-agent bash") para
-  # criar uma conexão Guacamole que cai direto dentro do container subot-agent — sem precisar
+  # ssh_username=..., ssh_password=..., ssh_command="docker exec -it subot-agent-1 bash") para
+  # criar uma conexão Guacamole que cai direto dentro do container subot-agent-1 — sem precisar
   # rodar sshd dentro dele (exigiria root, contra o hardening do container). Usa o sshd que já
   # existe na VM; as credenciais SSH ficam só no banco do Guacamole, não em arquivo nenhum aqui.
   subot-console:

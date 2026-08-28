@@ -4,7 +4,7 @@
 Diferente dos outros conectores (que operam a infraestrutura JÁ IMPLANTADA através do
 subot_core), este atua sobre o próprio código-fonte do projeto, antes de ele ser publicado ou
 atualizado no GitHub. Por isso é deliberadamente AUTO-CONTIDO — não importa subot_core nem exige
-rodar dentro do container 'subot-agent' (que nem tem o .git montado). Basta:
+rodar dentro do container 'subot-agent-1' (que nem tem o .git montado). Basta:
 
     pip install mcp Pillow
     python mcp-servers/repo_guardian_connector/server.py

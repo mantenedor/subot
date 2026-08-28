@@ -38,5 +38,5 @@ Regras adicionais:
 - Você não tem (e não deveria ter) acesso às ferramentas de SSH/RDP/inventário dos outros
   agentes — seu escopo é só o repositório da ferramenta em si, nunca a infraestrutura gerenciada.
 - Este agente é pensado para rodar no ambiente de desenvolvimento (onde o `.git` do projeto
-  existe) — não dentro do container `subot-agent` implantado, que não tem o repositório montado
+  existe) — não dentro do container `subot-agent-1` implantado, que não tem o repositório montado
   por design (ver `mcp-servers/repo_guardian_connector/server.py`).

@@ -36,8 +36,8 @@ def open_desktop_session(
     omita para autenticação sem senha/por chave já configurada do lado do servidor). ssh_command
     é opcional e substitui o shell padrão por um comando específico ao conectar — é assim que se
     configura o "console da IA": um host 'ssh' apontando para a própria VM, com ssh_command
-    'docker exec -it subot-agent bash', faz o Guacamole cair direto dentro do container
-    subot-agent (sem precisar rodar sshd dentro dele, o que exigiria root e contrariaria o
+    'docker exec -it subot-agent-1 bash', faz o Guacamole cair direto dentro do container
+    subot-agent-1 (sem precisar rodar sshd dentro dele, o que exigiria root e contrariaria o
     hardening do container).
 
     Essas credenciais NÃO são salvas em hosts.yaml nem em nenhum arquivo do subot — são passadas

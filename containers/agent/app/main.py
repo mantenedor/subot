@@ -1,5 +1,8 @@
 """subot-api — superfície REST espelhando a CLI/os servidores MCP, para que humanos ou automação
-sem IA possam disparar as mesmas operações com os mesmos controles de segurança dos agentes."""
+sem IA possam disparar as mesmas operações com os mesmos controles de segurança dos agentes.
+
+Roda como processo em background dentro do container 'agent' (junto com Claude Code e o Ollama),
+não é mais um container separado — ver containers/agent/entrypoint.sh."""
 from __future__ import annotations
 
 from typing import Any

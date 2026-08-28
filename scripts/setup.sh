@@ -5,10 +5,15 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-mkdir -p data/guac-db data/guac-recordings data/audit data/agent-home data/ollama-models data/certbot-webroot
-mkdir -p secrets/ssh secrets/tls/letsencrypt secrets/reverse-proxy
+mkdir -p data/guac-db data/guac-recordings data/audit data/agent-home data/ollama-models data/caddy-data data/caddy-config
+mkdir -p secrets/ssh
 mkdir -p containers/guacamole/initdb
 mkdir -p backups
+
+# O container 'agent' roda como UID 1000 (usuário 'subot') — diretórios que ele precisa escrever
+# (home, modelos do Ollama, auditoria) precisam pertencer a esse UID quando criados pela primeira
+# vez como root no host, senão a montagem bind fica de fato somente-leitura pra esse usuário.
+chown -R 1000:1000 data/agent-home data/ollama-models data/audit 2>/dev/null || true
 
 if [ ! -f .env ]; then
     echo "==> criando .env a partir de .env.example"
@@ -65,25 +70,32 @@ else
     echo "==> schema do Guacamole já gerado, mantendo como está"
 fi
 
-HTPASSWD="secrets/reverse-proxy/htpasswd"
-if [ ! -f "$HTPASSWD" ]; then
-    echo "==> gerando credencial Basic Auth para /api/ no reverse-proxy"
+if ! grep -qE '^SUBOT_API_BASIC_AUTH_HASH=.+' .env 2>/dev/null; then
+    echo "==> gerando credencial Basic Auth para /api/ no Caddy"
     API_USER="$(grep -E '^SUBOT_API_BASIC_AUTH_USER=' .env | cut -d= -f2)"
     API_USER="${API_USER:-admin}"
     API_PASS="$(openssl rand -base64 18 | tr -d '=+/')"
-    HASH="$(openssl passwd -apr1 "$API_PASS")"
-    echo "${API_USER}:${HASH}" > "$HTPASSWD"
-    echo "${API_USER}:${API_PASS}" > secrets/reverse-proxy/htpasswd-password.txt
-    chmod 600 secrets/reverse-proxy/htpasswd-password.txt
+    # hash bcrypt via o próprio binário do Caddy (é o formato que o basicauth dele exige — não é
+    # o mesmo formato do 'openssl passwd -apr1' usado por Apache/htpasswd)
+    HASH="$(docker run --rm caddy:2 caddy hash-password --plaintext "$API_PASS")"
+    if grep -qE '^SUBOT_API_BASIC_AUTH_HASH=' .env; then
+        ESCAPED_HASH="$(printf '%s' "$HASH" | sed 's/[&/\]/\\&/g')"
+        sed -i "s|^SUBOT_API_BASIC_AUTH_HASH=.*|SUBOT_API_BASIC_AUTH_HASH=${ESCAPED_HASH}|" .env
+    else
+        echo "SUBOT_API_BASIC_AUTH_HASH=${HASH}" >> .env
+    fi
+    mkdir -p secrets/caddy
+    echo "${API_USER}:${API_PASS}" > secrets/caddy/api-password.txt
+    chmod 600 secrets/caddy/api-password.txt
     echo "    usuário: ${API_USER}"
-    echo "    senha:   ${API_PASS}  (salva também em secrets/reverse-proxy/htpasswd-password.txt)"
+    echo "    senha:   ${API_PASS}  (salva também em secrets/caddy/api-password.txt)"
 else
-    echo "==> credencial Basic Auth de /api/ já existe, mantendo como está"
+    echo "==> credencial Basic Auth de /api/ já existe (.env), mantendo como está"
 fi
 
 echo "==> setup concluído. Próximos passos:"
-echo "    1. bash scripts/pull-models.sh   (depois de 'docker compose up -d' subir o ollama)"
-echo "    2. docker compose up -d"
-echo "    3. se for expor publicamente com Let's Encrypt: preencha SUBOT_DOMAIN e"
-echo "       SUBOT_LETSENCRYPT_EMAIL em .env, garanta que o DNS já aponta pra esta VM, e rode"
-echo "       bash scripts/init-letsencrypt.sh"
+echo "    1. docker compose up -d"
+echo "    2. bash scripts/pull-models.sh   (depois do container 'agent' estar de pé)"
+echo "    3. Pra expor com domínio público de verdade: preencha SUBOT_DOMAIN e"
+echo "       SUBOT_LETSENCRYPT_EMAIL em .env e suba de novo — o Caddy emite o certificado"
+echo "       Let's Encrypt sozinho, sem passo manual nenhum."

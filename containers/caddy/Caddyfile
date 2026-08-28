@@ -1,8 +1,8 @@
 # Único ponto de entrada público do subot. Caddy cuida de TLS sozinho: com um domínio público de
 # verdade em SUBOT_DOMAIN, emite e renova certificado Let's Encrypt automaticamente (sem certbot,
-# sem scripts de bootstrap); com 'localhost' ou um IP (sem domínio ainda), usa automaticamente um
-# certificado da CA interna do próprio Caddy — o navegador avisa que não é confiável, é esperado,
-# aceite o risco pra testar localmente até ter um domínio real.
+# sem scripts de bootstrap); sem domínio (acesso por IP), usa automaticamente um certificado da
+# CA interna do próprio Caddy — o navegador avisa que não é confiável, é esperado, aceite o risco
+# pra testar localmente até ter um domínio real.
 #
 # {$VAR:default} é resolvido pelo próprio Caddy a partir das variáveis de ambiente do container —
 # não precisa de sed/entrypoint customizado como no Apache antes.
@@ -13,7 +13,9 @@
 	email {$SUBOT_LETSENCRYPT_EMAIL:admin@localhost}
 }
 
-{$SUBOT_DOMAIN:localhost} {
+# Rotas compartilhadas entre o site do domínio (quando configurado) e o catch-all por IP abaixo —
+# evita duplicar a config duas vezes.
+(subot_routes) {
 	# Guacamole — único serviço pensado para acesso público direto. A autenticação de verdade
 	# acontece no próprio Guacamole (usuário/senha, recomenda-se habilitar TOTP — ver README).
 	# 'handle' blocks são mutuamente exclusivos e o Caddy os ordena por especificidade sozinho
@@ -39,4 +41,19 @@
 	handle / {
 		redir / /guacamole/ 307
 	}
+}
+
+# Site com o domínio real (ou 'localhost' se SUBOT_DOMAIN não estiver preenchido) — é o que o
+# Caddy usa pra saber qual certificado Let's Encrypt emitir via ACME.
+{$SUBOT_DOMAIN:localhost} {
+	import subot_routes
+}
+
+# Catch-all: TLS via SNI só funciona quando o cliente manda um hostname que bate com um site
+# block acima. Conectando direto por IP (sem domínio configurado, ou mesmo com um domínio
+# configurado mas acessando pelo IP), a maioria dos clientes não manda SNI nenhum (ou manda o
+# próprio IP) — sem este bloco, o handshake TLS falha porque o Caddy não sabe qual site servir.
+# Usa certificado da CA interna do Caddy (não dá pra emitir Let's Encrypt pra um IP).
+:443 {
+	import subot_routes
 }

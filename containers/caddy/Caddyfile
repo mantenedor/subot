@@ -7,7 +7,10 @@
 # {$VAR:default} é resolvido pelo próprio Caddy a partir das variáveis de ambiente do container —
 # não precisa de sed/entrypoint customizado como no Apache antes.
 {
-	email {$SUBOT_LETSENCRYPT_EMAIL}
+	# Sem valor padrão, {$VAR} vazio vira uma diretiva 'email' sem argumento nenhum e quebra o
+	# parse do Caddyfile inteiro — por isso o default aqui, mesmo sendo só um placeholder até
+	# você preencher SUBOT_LETSENCRYPT_EMAIL de verdade em .env.
+	email {$SUBOT_LETSENCRYPT_EMAIL:admin@localhost}
 }
 
 {$SUBOT_DOMAIN:localhost} {
@@ -25,7 +28,8 @@
 	# em duas etapas que o subot_core já exige pra qualquer ação sensível. Roda dentro do
 	# container 'agent' agora (não é mais um container separado).
 	handle /api* {
-		basicauth {
+		# 'basic_auth' (com underscore) — renomeada de 'basicauth' na v2.8.0 do Caddy.
+		basic_auth {
 			{$SUBOT_API_BASIC_AUTH_USER} {$SUBOT_API_BASIC_AUTH_HASH}
 		}
 		uri strip_prefix /api

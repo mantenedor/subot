@@ -22,31 +22,6 @@ Isso torna o disaster-recovery em duas partes independentes e óbvias: `git clon
 `install.sh`) traz a ferramenta pronta do zero; `scripts/backup.sh`/`restore.sh` carrega os
 insumos de uma instância específica por cima dela.
 
-### Higiene e publicação (`repo-guardian`)
-
-Quem garante essa separação na prática é o agente `repo-guardian`
-(`agents/repo-guardian.md` + `mcp-servers/repo_guardian_connector/`) — diferente dos outros 3
-agentes, ele não opera infraestrutura implantada, opera **este repositório**, antes de qualquer
-`git push`:
-
-- `check_gitignore` — confirma que `secrets/`, `data/`, `.env` e `config/hosts.yaml` estão
-  ignorados **e** não rastreados (adicionar ao `.gitignore` não desfaz um commit anterior), mais
-  varredura de nomes suspeitos (`*.pem`, `id_rsa*`, `htpasswd`, etc.) entre arquivos já rastreados.
-- `scan_for_secrets` — chaves privadas, AWS keys, tokens Slack/JWT, atribuições tipo
-  `api_key=...`, IPs (com nota de severidade) e strings de alta entropia.
-- `scan_images_for_metadata` / `strip_image_metadata` — lê e remove metadados EXIF/GPS/autor de
-  imagens. O **conteúdo visual** (texto na tela, credenciais visíveis em prints) fica a cargo da
-  própria visão do agente quando o modelo é multimodal — a ferramenta não tenta ler pixels.
-- `git_set_remote` / `git_push` — únicas ferramentas do projeto que tocam o remote git; `git_push`
-  roda a varredura de alta confiança de novo sozinho e **bloqueia incondicionalmente** se achar
-  algo crítico, e sempre exige confirmação explícita mesmo quando está tudo limpo.
-
-Esse conector é **auto-contido** (não depende de `subot_core`) porque roda no ambiente de
-desenvolvimento — onde o `.git` do projeto existe — e não dentro do container `subot-agent`
-implantado, que não tem (por design) o repositório da ferramenta montado. Para usar:
-`pip install mcp Pillow` e registre em `.claude/settings.json` (já vem registrado; ajuste
-`"command"` de `python` para `python3` se seu SO só tiver esse último no PATH).
-
 ## Princípio central: multi-IA, local-first
 
 O Claude Code é o **ponto de partida**, não uma dependência obrigatória. Todo agente do subot é

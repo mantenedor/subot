@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-mkdir -p data/guac-db data/guac-recordings data/audit data/agent-home data/ollama-models data/caddy-data data/caddy-config
+mkdir -p data/guac-db data/guac-recordings data/audit data/agent-home data/ollama-models
 mkdir -p secrets/ssh
 mkdir -p containers/guacamole/initdb
 mkdir -p backups
@@ -70,32 +70,8 @@ else
     echo "==> schema do Guacamole já gerado, mantendo como está"
 fi
 
-if ! grep -qE '^SUBOT_API_BASIC_AUTH_HASH=.+' .env 2>/dev/null; then
-    echo "==> gerando credencial Basic Auth para /api/ no Caddy"
-    API_USER="$(grep -E '^SUBOT_API_BASIC_AUTH_USER=' .env | cut -d= -f2)"
-    API_USER="${API_USER:-admin}"
-    API_PASS="$(openssl rand -base64 18 | tr -d '=+/')"
-    # hash bcrypt via o próprio binário do Caddy (é o formato que o basicauth dele exige — não é
-    # o mesmo formato do 'openssl passwd -apr1' usado por Apache/htpasswd)
-    HASH="$(docker run --rm caddy:2 caddy hash-password --plaintext "$API_PASS")"
-    if grep -qE '^SUBOT_API_BASIC_AUTH_HASH=' .env; then
-        ESCAPED_HASH="$(printf '%s' "$HASH" | sed 's/[&/\]/\\&/g')"
-        sed -i "s|^SUBOT_API_BASIC_AUTH_HASH=.*|SUBOT_API_BASIC_AUTH_HASH=${ESCAPED_HASH}|" .env
-    else
-        echo "SUBOT_API_BASIC_AUTH_HASH=${HASH}" >> .env
-    fi
-    mkdir -p secrets/caddy
-    echo "${API_USER}:${API_PASS}" > secrets/caddy/api-password.txt
-    chmod 600 secrets/caddy/api-password.txt
-    echo "    usuário: ${API_USER}"
-    echo "    senha:   ${API_PASS}  (salva também em secrets/caddy/api-password.txt)"
-else
-    echo "==> credencial Basic Auth de /api/ já existe (.env), mantendo como está"
-fi
-
 echo "==> setup concluído. Próximos passos:"
 echo "    1. docker compose up -d"
 echo "    2. bash scripts/pull-models.sh   (depois do container 'agent' estar de pé)"
-echo "    3. Pra expor com domínio público de verdade: preencha SUBOT_DOMAIN e"
-echo "       SUBOT_LETSENCRYPT_EMAIL em .env e suba de novo — o Caddy emite o certificado"
-echo "       Let's Encrypt sozinho, sem passo manual nenhum."
+echo "    3. Guacamole fica em http://<IP-desta-VM>:8080/guacamole/ (HTTP, sem TLS — ver README"
+echo "       sobre o trade-off de segurança dessa porta)."

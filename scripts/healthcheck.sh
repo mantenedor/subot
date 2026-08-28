@@ -13,13 +13,8 @@ docker compose ps || FAIL=1
 echo "==> modelos do Ollama (dentro do container 'agent')"
 docker compose exec -T agent ollama list || FAIL=1
 
-echo "==> caddy respondendo em https://localhost/guacamole/"
-curl -fsSk -o /dev/null "https://localhost/guacamole/" || FAIL=1
-
-if [ -n "${SUBOT_DOMAIN:-}" ] && [ "$SUBOT_DOMAIN" != "localhost" ]; then
-    echo "==> https://${SUBOT_DOMAIN}/guacamole/ (certificado real)"
-    curl -fsS -o /dev/null "https://${SUBOT_DOMAIN}/guacamole/" || FAIL=1
-fi
+echo "==> guacamole respondendo em http://localhost:8080/guacamole/"
+curl -fsS -o /dev/null "http://localhost:8080/guacamole/" || FAIL=1
 
 if [ "$FAIL" -ne 0 ]; then
     echo "==> healthcheck FALHOU"

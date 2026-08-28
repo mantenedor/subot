@@ -12,9 +12,8 @@
 # passphrase gerada nesta mesma execução — você só precisa guardá-la, não reexportar nada agora),
 # sobe a stack, baixa os modelos locais e roda o checklist de saúde.
 #
-# Só existem 3 escolhas interativas, e só aparecem se já houver uma instalação/containers do
-# subot no ar: [Enter] atualizar (padrão) | r) reinstalar do zero | b) restaurar de um backup |
-# a) configurar domínio/HTTPS (Caddy emite o certificado Let's Encrypt sozinho, automaticamente).
+# Só existem 2 escolhas interativas, e só aparecem se já houver uma instalação/containers do
+# subot no ar: [Enter] atualizar (padrão) | r) reinstalar do zero | b) restaurar de um backup.
 #
 # Variáveis de ambiente que ajustam o comportamento (opcional):
 #   SUBOT_REPO_URL   URL do repositório git (default: aponte para o seu fork/org antes de publicar)
@@ -78,7 +77,6 @@ if $ALREADY_EXISTS; then
         echo "  [Enter] atualizar e continuar (padrão)"
         echo "  r       reinstalar do zero (apaga $INSTALL_DIR e os containers atuais)"
         echo "  b       restaurar de um backup"
-        echo "  a       configurar domínio/HTTPS (Caddy — Let's Encrypt automático)"
         read -r -p "Escolha: " CHOICE < /dev/tty
     fi
 
@@ -110,19 +108,6 @@ if $ALREADY_EXISTS; then
             docker compose up -d
             echo "restaurado. Se o backup incluía a chave SSH, exporte SUBOT_SSH_KEY_PASSPHRASE"
             echo "(a passphrase guardada quando ela foi gerada) e rode 'docker compose up -d' de novo."
-            exit 0
-            ;;
-        a|A)
-            cd "$INSTALL_DIR"
-            if ! grep -qE '^SUBOT_DOMAIN=.+' .env 2>/dev/null; then
-                echo "Preencha SUBOT_DOMAIN (e SUBOT_LETSENCRYPT_EMAIL) em $INSTALL_DIR/.env"
-                echo "primeiro — DNS já precisa apontar pra esta VM. Depois rode este instalador"
-                echo "de novo e escolha 'a' outra vez."
-                exit 1
-            fi
-            log "recriando o Caddy com o novo SUBOT_DOMAIN (ele emite o certificado sozinho)"
-            docker compose up -d caddy
-            echo "pronto. Acompanhe com: docker compose logs -f caddy"
             exit 0
             ;;
         *)
@@ -188,9 +173,8 @@ cat <<EOF
 
 - Se uma passphrase de chave SSH apareceu acima, guarde-a agora num lugar seguro — ela não fica
   salva em nenhum arquivo, e só volta a fazer falta numa reinstalação ou restauração de backup.
-- Pra expor publicamente com HTTPS: preencha SUBOT_DOMAIN e SUBOT_LETSENCRYPT_EMAIL em .env (DNS
-  já apontando pra esta máquina) e rode este instalador de novo, escolhendo a opção 'a' (ou
-  direto: docker compose up -d caddy) — o Caddy emite o certificado Let's Encrypt sozinho.
+- Guacamole fica em http://<IP-desta-VM>:8080/guacamole/ (HTTP, sem TLS — ver README sobre o
+  trade-off de segurança dessa porta).
 - Pra reinstalar do zero ou restaurar de um backup: rode este instalador de novo.
 
 Documentação completa: ${INSTALL_DIR}/README.md

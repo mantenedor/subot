@@ -76,9 +76,8 @@ services:
       POSTGRES_DATABASE: ${GUACDB_DATABASE:-guacamole_db}
       POSTGRES_USER: ${GUACDB_USER:-guacamole}
       POSTGRES_PASSWORD: ${GUACDB_PASSWORD:?defina GUACDB_PASSWORD em .env — rode scripts/setup.sh}
-    # Publicada direto em 8080 (HTTP puro, sem TLS) por decisão explícita — enquanto isso, o
-    # 'caddy' também fala com esta em http://guacamole:8080 dentro da rede subot_net, então dá
-    # pra acessar tanto direto (http://IP:8080/guacamole/) quanto via Caddy (https://IP/guacamole/).
+    # Publicada direto em 8080 (HTTP puro, sem TLS) — único ponto de entrada público da stack
+    # hoje. Sem proxy/TLS na frente por decisão explícita (ver README, seção de segurança).
     ports:
       - "8080:8080"
     networks: [subot_net]
@@ -105,31 +104,11 @@ services:
       - ./data/audit:/opt/subot/data/audit
       - ./data/agent-home:/home/subot
       - ./data/ollama-models:/home/subot/.ollama
+    # API REST (uvicorn, porta 8081) não é publicada em lugar nenhum — só alcançável de dentro da
+    # rede subot_net (ex.: 'docker compose exec agent curl localhost:8081/health') até que algum
+    # proxy volte a ficar na frente dela. Ver README, "Fora de escopo".
     networks: [subot_net]
     stdin_open: true
     tty: true
     mem_limit: 10g
     cpus: 4.0
-
-  # Único container que publica portas no host — porta de entrada pública da stack. Caddy termina
-  # TLS sozinho (Let's Encrypt automático com domínio real, certificado local caso contrário — ver
-  # containers/caddy/Caddyfile) e faz proxy reverso para guacamole (/guacamole/) e agent (/api/,
-  # atrás de Basic Auth).
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    depends_on: [guacamole, agent]
-    environment:
-      SUBOT_DOMAIN: ${SUBOT_DOMAIN:-localhost}
-      SUBOT_API_BASIC_AUTH_USER: ${SUBOT_API_BASIC_AUTH_USER:-admin}
-      SUBOT_API_BASIC_AUTH_HASH: ${SUBOT_API_BASIC_AUTH_HASH:?defina SUBOT_API_BASIC_AUTH_HASH em .env — rode scripts/setup.sh}
-    volumes:
-      - ./containers/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./data/caddy-data:/data
-      - ./data/caddy-config:/config
-    ports:
-      - "80:80"
-      - "443:443"
-    networks: [subot_net]
-    mem_limit: 256m
-    cpus: 1.0

@@ -4,8 +4,10 @@ set -eu
 echo "[subot-agent] iniciando..."
 
 SSH_DIR="${SUBOT_SSH_DIR:-/opt/subot/secrets/ssh}"
-mkdir -p "$SSH_DIR" "${SUBOT_AUDIT_DIR:-/opt/subot/data/audit}"
-touch "$SSH_DIR/known_hosts"
+mkdir -p "${SUBOT_AUDIT_DIR:-/opt/subot/data/audit}"
+# secrets/ssh é montado somente-leitura neste container — 'touch' aqui é só best-effort (o
+# arquivo já devia existir, criado por scripts/setup.sh no host); nunca deve derrubar o container.
+touch "$SSH_DIR/known_hosts" 2>/dev/null || true
 
 if [ -f "$SSH_DIR/bastion_id_ed25519" ]; then
     perm=$(stat -c "%a" "$SSH_DIR/bastion_id_ed25519" 2>/dev/null || echo "600")

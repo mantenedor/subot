@@ -158,6 +158,9 @@ fi
 log "subindo a stack (docker compose up -d)"
 docker compose up -d
 
+log "registrando o console SSH do agent no Guacamole"
+bash scripts/register-console.sh || echo "    falhou — rode 'bash scripts/register-console.sh' depois pra tentar de novo."
+
 log "baixando modelos locais do Ollama (pode demorar alguns minutos)"
 bash scripts/pull-models.sh || echo "    falhou — rode 'bash scripts/pull-models.sh' depois pra tentar de novo."
 
@@ -174,7 +177,9 @@ cat <<EOF
 - Se uma passphrase de chave SSH apareceu acima, guarde-a agora num lugar seguro — ela não fica
   salva em nenhum arquivo, e só volta a fazer falta numa reinstalação ou restauração de backup.
 - Guacamole fica em http://<IP-desta-VM>:8080/guacamole/ (HTTP, sem TLS — ver README sobre o
-  trade-off de segurança dessa porta).
+  trade-off de segurança dessa porta). Login: usuário/senha em .env (GUACAMOLE_ADMIN_USER/
+  GUACAMOLE_ADMIN_PASSWORD, default guacadmin/guacadmin — troque depois do primeiro login). A
+  conexão 'subot-console' já está lá, pronta pra abrir um shell dentro do container 'agent'.
 - Pra reinstalar do zero ou restaurar de um backup: rode este instalador de novo.
 
 Documentação completa: ${INSTALL_DIR}/README.md

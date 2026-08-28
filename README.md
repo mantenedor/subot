@@ -216,6 +216,7 @@ interno dele passam a exigir credencial — ver comentário no topo de `install.
 bash scripts/setup.sh          # cria .env, config/hosts.yaml, chave SSH do bastião (com passphrase — anote!), schema do Guacamole
 export SUBOT_SSH_KEY_PASSPHRASE='a-passphrase-que-o-setup.sh-mostrou'
 docker compose up -d
+bash scripts/register-console.sh   # cria a conexão "subot-console" no Guacamole
 bash scripts/pull-models.sh    # baixa os modelos locais default no Ollama (qwen2.5:14b e 7b)
 python3 scripts/sync-claude-agents.py   # projeta agents/*.md -> .claude/agents/*.md
 ```
@@ -246,30 +247,12 @@ VM como não confiável por padrão:
 
 ## Console SSH da IA via Guacamole
 
-Dá pra abrir um shell dentro do container `agent` direto pelo navegador (via Guacamole), sem
-`docker exec` e sem tocar a rede/sshd da VM — um `dropbear` roda em background dentro do próprio
-`agent`, só na rede docker interna (`subot_net`, nunca publicado no host), autenticado por uma
-chave dedicada (`secrets/ssh/guac_console_ed25519`, gerada por `scripts/setup.sh`, sem
-passphrase — o alcance dela já é limitado a "dentro da rede docker").
-
-1. Adicione o host `subot-console` em `config/hosts.yaml` (exemplo completo em
-   `config/hosts.yaml.example`): `address: agent`, `port: 2222`, `user: subot`, `protocol: ssh`.
-2. Rode, de dentro do container `agent`:
-   ```bash
-   docker compose exec -it agent python3 - <<'EOF'
-   import sys
-   sys.path.insert(0, "/opt/subot/mcp-servers/remote_desktop_connector")
-   import server
-   with open("/opt/subot/secrets/ssh/guac_console_ed25519") as f:
-       key = f.read()
-   print(server.open_desktop_session(host="subot-console", ssh_username="subot", ssh_private_key=key))
-   EOF
-   ```
-3. Abra a URL retornada — cai direto num shell dentro do `agent`, de onde dá pra rodar `claude`,
-   `subot agent list`, ou SSH manual pros hosts gerenciados.
-
-É um canal separado do `ssh_connector` (que é o acesso SSH da própria IA, com a chave do
-bastião) — este é acesso humano, gravado/auditado pelo Guacamole.
+`install.sh` (e `scripts/register-console.sh`, que ele chama) já deixam uma conexão
+**"subot-console"** pronta no Guacamole — login no Guacamole (`http://IP:8080/guacamole/`) e
+clicar nela cai direto num shell dentro do container `agent` (de onde dá pra rodar `claude`,
+`subot agent list`, etc.), sem `docker exec` e sem tocar a rede/sshd da VM. Um `dropbear` roda em
+background dentro do `agent`, só na rede docker interna, autenticado por uma chave dedicada
+(`secrets/ssh/guac_console_ed25519`, gerada por `scripts/setup.sh`).
 
 ## Adicionando um host gerenciado
 

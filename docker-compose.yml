@@ -7,6 +7,10 @@ x-subot-env: &subot-env
   SUBOT_ALLOWLIST_FILE: /opt/subot/config/policy/allowlist.yaml
   SUBOT_DESTRUCTIVE_FILE: /opt/subot/config/policy/destructive_patterns.yaml
   SUBOT_SSH_DIR: /opt/subot/secrets/ssh
+  # Passphrase da chave privada do bastião — de propósito SEM default e SEM vir de .env aqui.
+  # Só existe se você exportar a variável no shell antes de 'docker compose up' (ver README);
+  # nunca fica persistida em disco. Sem ela, a chave (se gerada com passphrase) não abre.
+  SUBOT_SSH_KEY_PASSPHRASE: ${SUBOT_SSH_KEY_PASSPHRASE:-}
   SUBOT_AUDIT_DIR: /opt/subot/data/audit
   SUBOT_CONFIRM_STORE: /opt/subot/data/audit/.confirm_tokens.json
   SUBOT_CONFIRM_TOKEN_TTL_SECONDS: ${SUBOT_CONFIRM_TOKEN_TTL_SECONDS:-300}

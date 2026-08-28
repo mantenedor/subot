@@ -13,6 +13,11 @@ if [ -f "$SSH_DIR/bastion_id_ed25519" ]; then
         600|400) ;;
         *) echo "[subot-agent] AVISO: $SSH_DIR/bastion_id_ed25519 tem permissao $perm (esperado 600). Rode 'chmod 600' no host." ;;
     esac
+    if ! ssh-keygen -y -P '' -f "$SSH_DIR/bastion_id_ed25519" >/dev/null 2>&1; then
+        if [ -z "${SUBOT_SSH_KEY_PASSPHRASE:-}" ]; then
+            echo "[subot-agent] AVISO: a chave do bastiao esta protegida por passphrase mas SUBOT_SSH_KEY_PASSPHRASE nao foi definida — operacoes SSH vao falhar ate voce exportar essa variavel e subir a stack de novo."
+        fi
+    fi
 else
     echo "[subot-agent] AVISO: nenhuma chave do bastiao em $SSH_DIR/bastion_id_ed25519 — rode scripts/setup.sh no host primeiro."
 fi

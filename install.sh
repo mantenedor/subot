@@ -65,6 +65,8 @@ fi
 cd "$INSTALL_DIR"
 
 log "rodando scripts/setup.sh (gera .env, hosts.yaml, chaves SSH, credenciais — nunca sobrescreve o que já existe)"
+echo "    ATENÇÃO: se este for o primeiro setup, uma passphrase da chave SSH vai aparecer abaixo"
+echo "    UMA VEZ — copie e guarde antes de continuar, ela não fica salva em nenhum arquivo."
 bash scripts/setup.sh
 
 log "subindo a stack (docker compose up -d)"
@@ -75,12 +77,16 @@ cat <<EOF
 ==> subot está de pé em ${INSTALL_DIR}
 
 Próximos passos:
-  1. bash scripts/pull-models.sh          # baixa os modelos locais do Ollama (qwen2.5:14b / 7b)
-  2. python3 scripts/sync-claude-agents.py
-  3. Para expor publicamente com TLS: preencha SUBOT_DOMAIN e SUBOT_LETSENCRYPT_EMAIL em .env
+  1. Se apareceu uma passphrase de chave SSH acima, rode agora:
+       export SUBOT_SSH_KEY_PASSPHRASE='<a passphrase que apareceu>'
+       docker compose up -d
+     (sem isso os containers sobem, mas toda operação SSH falha até você fazer isso)
+  2. bash scripts/pull-models.sh          # baixa os modelos locais do Ollama (qwen2.5:14b / 7b)
+  3. python3 scripts/sync-claude-agents.py
+  4. Para expor publicamente com TLS: preencha SUBOT_DOMAIN e SUBOT_LETSENCRYPT_EMAIL em .env
      (DNS já apontando pra esta máquina) e rode:
        bash scripts/init-letsencrypt.sh
-  4. Restaurando dados de outra instância? Pare a stack ('docker compose down'), rode
+  5. Restaurando dados de outra instância? Pare a stack ('docker compose down'), rode
      'bash scripts/restore.sh <arquivo.tar.gz>' e suba de novo.
 
 Documentação completa: ${INSTALL_DIR}/README.md

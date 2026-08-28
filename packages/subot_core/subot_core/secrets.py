@@ -46,3 +46,12 @@ def known_hosts_path() -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.touch(exist_ok=True)
     return path
+
+
+def key_passphrase() -> str | None:
+    """Passphrase da chave privada do bastião — NUNCA fica salva em arquivo (nem em .env por
+    padrão). É fornecida ao container só como variável de ambiente no momento do
+    'docker compose up', então só existe na memória do processo em execução. Se a chave foi
+    gerada sem passphrase (rodando fora do fluxo padrão de scripts/setup.sh), retorna None e o
+    paramiko simplesmente carrega a chave sem tentar descriptografá-la."""
+    return os.environ.get("SUBOT_SSH_KEY_PASSPHRASE") or None

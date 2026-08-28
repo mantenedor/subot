@@ -22,6 +22,31 @@ Isso torna o disaster-recovery em duas partes independentes e óbvias: `git clon
 `install.sh`) traz a ferramenta pronta do zero; `scripts/backup.sh`/`restore.sh` carrega os
 insumos de uma instância específica por cima dela.
 
+### Higiene e publicação (`repo-guardian`)
+
+Quem garante essa separação na prática é o agente `repo-guardian`
+(`agents/repo-guardian.md` + `mcp-servers/repo_guardian_connector/`) — diferente dos outros 3
+agentes, ele não opera infraestrutura implantada, opera **este repositório**, antes de qualquer
+`git push`:
+
+- `check_gitignore` — confirma que `secrets/`, `data/`, `.env` e `config/hosts.yaml` estão
+  ignorados **e** não rastreados (adicionar ao `.gitignore` não desfaz um commit anterior), mais
+  varredura de nomes suspeitos (`*.pem`, `id_rsa*`, `htpasswd`, etc.) entre arquivos já rastreados.
+- `scan_for_secrets` — chaves privadas, AWS keys, tokens Slack/JWT, atribuições tipo
+  `api_key=...`, IPs (com nota de severidade) e strings de alta entropia.
+- `scan_images_for_metadata` / `strip_image_metadata` — lê e remove metadados EXIF/GPS/autor de
+  imagens. O **conteúdo visual** (texto na tela, credenciais visíveis em prints) fica a cargo da
+  própria visão do agente quando o modelo é multimodal — a ferramenta não tenta ler pixels.
+- `git_set_remote` / `git_push` — únicas ferramentas do projeto que tocam o remote git; `git_push`
+  roda a varredura de alta confiança de novo sozinho e **bloqueia incondicionalmente** se achar
+  algo crítico, e sempre exige confirmação explícita mesmo quando está tudo limpo.
+
+Esse conector é **auto-contido** (não depende de `subot_core`) porque roda no ambiente de
+desenvolvimento — onde o `.git` do projeto existe — e não dentro do container `subot-agent`
+implantado, que não tem (por design) o repositório da ferramenta montado. Para usar:
+`pip install mcp Pillow` e registre em `.claude/settings.json` (já vem registrado; ajuste
+`"command"` de `python` para `python3` se seu SO só tiver esse último no PATH).
+
 ## Princípio central: multi-IA, local-first
 
 O Claude Code é o **ponto de partida**, não uma dependência obrigatória. Todo agente do subot é
@@ -90,6 +115,14 @@ Toda ação sobre um host gerenciado passa por `packages/subot_core`:
    confirmação.
 6. Containers próprios rodam como usuário não-root; o socket do Docker nunca é montado; chaves SSH
    são montadas somente-leitura.
+7. **A chave privada SSH do bastião é protegida por passphrase** (AES, formato nativo do
+   OpenSSH/paramiko) — o arquivo em `secrets/ssh/` nunca é texto plano utilizável sozinho, mesmo
+   que alguém tenha acesso de leitura ao disco do host. A passphrase é gerada por
+   `scripts/setup.sh`, mostrada uma única vez no terminal e nunca é salva em nenhum arquivo —
+   você precisa exportá-la (`SUBOT_SSH_KEY_PASSPHRASE`) antes de cada `docker compose up`. Isso
+   protege contra disco/backup roubado; não protege contra alguém com root no host que decide
+   entrar no container em execução (`docker exec`) — nenhuma configuração de container consegue
+   evitar isso, é uma limitação de qualquer coisa rodando no mesmo kernel do host.
 
 ## Dimensionamento de VM (CPU-only, escala pequena)
 
@@ -156,7 +189,8 @@ ferramenta do zero), depois `docker compose down`, `bash scripts/restore.sh <bac
 ## Quickstart manual (sem o instalador)
 
 ```bash
-bash scripts/setup.sh          # cria .env, config/hosts.yaml, diretórios de dados, chave SSH do bastião, schema do Guacamole, credencial Basic Auth
+bash scripts/setup.sh          # cria .env, config/hosts.yaml, chave SSH do bastião (com passphrase — anote!), schema do Guacamole, credencial Basic Auth
+export SUBOT_SSH_KEY_PASSPHRASE='a-passphrase-que-o-setup.sh-mostrou'
 docker compose up -d
 bash scripts/pull-models.sh    # baixa os modelos locais default no Ollama (qwen2.5:14b e 7b)
 python3 scripts/sync-claude-agents.py   # projeta agents/*.md -> .claude/agents/*.md

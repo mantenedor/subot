@@ -43,6 +43,7 @@ class SSHGateway:
             port=host.port,
             username=host.user,
             key_filename=str(key_path),
+            passphrase=secrets.key_passphrase(),
             timeout=15,
             allow_agent=False,
             look_for_keys=False,

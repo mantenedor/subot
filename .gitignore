@@ -16,6 +16,10 @@ config/hosts.yaml
 # schema do Guacamole, gerado localmente pelo setup.sh a partir da imagem oficial
 containers/guacamole/initdb/*.sql
 
+# estado local do repo_guardian_connector (log de auditoria + tokens de confirmação) — não é
+# insumo de ambiente de deploy, é estado de dev-time; ainda assim nunca vai para o git
+.subot-guardian/
+
 backups/
 
 .env

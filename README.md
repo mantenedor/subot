@@ -166,31 +166,26 @@ cd /opt   # ou onde preferir manter o projeto
 curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/install.sh | bash
 ```
 
-Isso deixa a ferramenta em `/opt/subot`. Se em algum momento o repositório voltar a ser privado,
-buscar o `install.sh` e o `git clone` interno dele passam a exigir credencial — ver comentário no
-topo de `install.sh`.
+Isso faz tudo sozinho, sem perguntar nada: checa/instala Docker, clona o repositório, gera a
+chave SSH e sobe a stack **já usando a passphrase gerada nesta mesma execução** (você só precisa
+guardá-la quando ela aparecer na tela — não precisa reexportar nada agora), baixa os modelos
+locais do Ollama, projeta os agentes pro Claude Code e roda o checklist de saúde.
 
-O `install.sh` faz o resto: checa/instala Docker, clona o repositório, roda `scripts/setup.sh` e
-sobe a stack. É idempotente — rodar de novo (no mesmo diretório) atualiza (`git pull`) em vez de
-duplicar, e nunca sobrescreve `.env`/`secrets/`/`config/hosts.yaml` já existentes. Ajustável via
-`SUBOT_REPO_URL`, `SUBOT_REPO_REF` e `SUBOT_INSTALL_DIR` (esta última sobrescreve o destino padrão
-`./subot`, aceitando um caminho absoluto se quiser instalar em outro lugar independente do `cd`).
+Rodar de novo (no mesmo diretório, ou apontando pra uma instalação existente) só pergunta algo
+se detectar uma instalação/containers do subot já no ar — e nesse caso só oferece 3 escolhas:
 
-No final, o `install.sh` abre um **menu interativo** (`scripts/menu.sh`) com os passos que
-sobraram — baixar modelos do Ollama, configurar HTTPS/Let's Encrypt, checklist de saúde, conferir
-se a passphrase da chave SSH está ativa, etc. Cada opção do menu diz explicitamente, antes de
-rodar, se o comando executa **no host** ou **dentro de um container** (via `docker compose
-exec`/`run`) — rode `bash scripts/menu.sh` a qualquer momento depois pra voltar a ele.
+```
+[Enter] atualizar e continuar (padrão)
+  r      reinstalar do zero (apaga tudo e clona de novo — pede confirmação)
+  b      restaurar de um backup
+  a      configurar só o Apache/HTTPS (Let's Encrypt)
+```
 
-No **início**, o `install.sh` também detecta instalação/containers/imagens/modelos já existentes
-(em qualquer diretório — os containers são identificados pelo nome do projeto compose `subot`,
-não pelo caminho) e, se achar algo, pergunta interativamente: atualizar a instalação existente,
-recriar do zero (destrutivo, pede confirmação escrita), restaurar de um backup, ou só abrir o
-menu de próximos passos direto.
+Sem terminal interativo (ex.: rodando em CI), assume `[Enter]` (atualizar) automaticamente.
 
-Restaurando uma instância existente numa VM nova? Rode o `install.sh` acima primeiro (traz a
-ferramenta do zero), depois `docker compose down`, `bash scripts/restore.sh <backup.tar.gz>` e
-`docker compose up -d` de novo.
+Se em algum momento o repositório voltar a ser privado, buscar o `install.sh` e o `git clone`
+interno dele passam a exigir credencial — ver comentário no topo de `install.sh`. Ajustável via
+`SUBOT_REPO_URL`, `SUBOT_REPO_REF` e `SUBOT_INSTALL_DIR`.
 
 ## Quickstart manual (sem o instalador)
 
@@ -201,9 +196,6 @@ docker compose up -d
 bash scripts/pull-models.sh    # baixa os modelos locais default no Ollama (qwen2.5:14b e 7b)
 python3 scripts/sync-claude-agents.py   # projeta agents/*.md -> .claude/agents/*.md
 ```
-
-Ou, em vez das últimas duas linhas, `bash scripts/menu.sh` pra fazer isso (e o resto: TLS,
-healthcheck) por um menu interativo — mesmo menu que o `install.sh` abre no final.
 
 Neste ponto o `reverse-proxy` fica reiniciando em loop (`restart: unless-stopped`) — ele não sobe
 sem *algum* certificado em `SSLCertificateFile`, e ainda não existe nenhum. Isso não afeta os

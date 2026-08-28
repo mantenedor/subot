@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instalador de um comando só do subot, para uma VM nova:
+# Instalador de um comando só do subot:
 #
 #   curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/install.sh | bash
 #
@@ -8,11 +8,13 @@
 # (link raw com token temporário) e exporte SUBOT_REPO_URL com um token de escopo 'repo' embutido
 # (https://x-access-token:<TOKEN>@github.com/mantenedor/subot.git) antes de rodar.
 #
-# Idempotente: se detectar instalação/containers/imagens/modelos já existentes (em QUALQUER
-# diretório, não só no destino atual), pergunta interativamente o que fazer — atualizar, recriar
-# do zero (destrutivo, com confirmação), restaurar de um backup, ou só abrir o menu de próximos
-# passos. Nunca sobrescreve .env / secrets/ / config/hosts.yaml existentes — scripts/setup.sh já
-# preserva tudo isso.
+# Por padrão faz TUDO sozinho, sem perguntar nada: clona/atualiza, gera a chave SSH (e já usa a
+# passphrase gerada nesta mesma execução — você só precisa guardá-la, não reexportar nada agora),
+# sobe a stack, baixa os modelos locais e roda o checklist de saúde.
+#
+# Só existem 3 escolhas interativas, e só aparecem se já houver uma instalação/containers do
+# subot no ar: [Enter] atualizar (padrão) | r) reinstalar do zero | b) restaurar de um backup |
+# a) configurar só o Apache/HTTPS (Let's Encrypt).
 #
 # Variáveis de ambiente que ajustam o comportamento (opcional):
 #   SUBOT_REPO_URL   URL do repositório git (default: aponte para o seu fork/org antes de publicar)
@@ -28,6 +30,7 @@ INSTALL_DIR="${SUBOT_INSTALL_DIR:-$PWD/subot}"
 
 log() { printf '==> %s\n' "$1"; }
 require_cmd() { command -v "$1" >/dev/null 2>&1; }
+have_tty() { [ -r /dev/tty ]; }
 
 log "verificando pré-requisitos"
 if ! require_cmd git; then
@@ -57,93 +60,65 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# [HOST] Detecta instalação/containers/imagens/modelos já existentes ANTES de clonar/subir
-# qualquer coisa. Containers/imagens são detectados globalmente (pelo nome do projeto compose
-# 'subot', fixo em docker-compose.yml via 'name:'), então isso pega até instalações abandonadas
-# em outro diretório (ex.: uma tentativa anterior em /root enquanto agora se instala em /opt).
+# Instalação/containers do subot já existem? (containers são detectados pelo nome do projeto
+# compose 'subot', fixo em docker-compose.yml — então pega até uma instalação em outro diretório.)
+# Se sim, e só nesse caso, oferece as 3 únicas escolhas interativas do instalador.
 # ---------------------------------------------------------------------------
-EXISTING_DIR=false
-[ -d "$INSTALL_DIR/.git" ] && EXISTING_DIR=true
-
-EXISTING_CONTAINERS="$(docker ps -a --filter "label=com.docker.compose.project=subot" --format '{{.Names}} ({{.Status}})' 2>/dev/null || true)"
-EXISTING_IMAGES="$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -E '^subot-(subot-)?(agent|api)' || true)"
-
-OLLAMA_CONTAINER="$(docker ps --filter "label=com.docker.compose.project=subot" --filter "label=com.docker.compose.service=ollama" --format '{{.Names}}' 2>/dev/null | head -1 || true)"
-EXISTING_MODELS=""
-if [ -n "$OLLAMA_CONTAINER" ]; then
-    EXISTING_MODELS="$(docker exec "$OLLAMA_CONTAINER" ollama list 2>/dev/null | tail -n +2 | awk '{print $1}' | paste -sd ', ' - 2>/dev/null || true)"
+ALREADY_EXISTS=false
+[ -d "$INSTALL_DIR/.git" ] && ALREADY_EXISTS=true
+if docker ps -a --filter "label=com.docker.compose.project=subot" -q 2>/dev/null | grep -q .; then
+    ALREADY_EXISTS=true
 fi
 
-EXISTING_BACKUPS=""
-[ -d "$INSTALL_DIR/backups" ] && EXISTING_BACKUPS="$(ls -1 "$INSTALL_DIR/backups"/subot-env-backup-*.tar.gz 2>/dev/null || true)"
-
-if $EXISTING_DIR || [ -n "$EXISTING_CONTAINERS" ] || [ -n "$EXISTING_IMAGES" ]; then
-    echo ""
-    echo "==> [HOST] estado existente detectado:"
-    echo "    diretório $INSTALL_DIR já é um clone do subot: $([ "$EXISTING_DIR" = true ] && echo sim || echo não)"
-    echo "    containers do subot (docker, em qualquer diretório): ${EXISTING_CONTAINERS:-nenhum}"
-    echo "    imagens já construídas (subot-agent/subot-api): ${EXISTING_IMAGES:-nenhuma}"
-    echo "    modelos do Ollama já baixados: ${EXISTING_MODELS:-nenhum (ou o container ollama não está rodando)}"
-    echo "    backups disponíveis em $INSTALL_DIR/backups: ${EXISTING_BACKUPS:-nenhum}"
-    echo ""
-
-    if [ -r /dev/tty ]; then
-        echo "O que você quer fazer?"
-        echo "  1) Atualizar a instalação existente [HOST: git pull + docker compose up -d] (recomendado)"
-        echo "  2) Recriar do zero — PARA e REMOVE containers/dados atuais, clona de novo [HOST] (destrutivo)"
-        echo "  3) Restaurar a partir de um backup existente [HOST]"
-        echo "  4) Só abrir o menu de próximos passos (modelos, reverse proxy, healthcheck...) [HOST]"
-        echo "  5) Cancelar, não fazer nada"
-        read -r -p "Escolha [1-5]: " PREFLIGHT_CHOICE < /dev/tty
-    else
-        echo "Sem terminal interativo (stdin ocupado pelo próprio script, ou rodando sem TTY) —"
-        echo "assumindo opção 1 (atualizar instalação existente)."
-        PREFLIGHT_CHOICE=1
+if $ALREADY_EXISTS; then
+    CHOICE=""
+    if have_tty; then
+        echo ""
+        echo "Instalação do subot já detectada."
+        echo "  [Enter] atualizar e continuar (padrão)"
+        echo "  r       reinstalar do zero (apaga $INSTALL_DIR e os containers atuais)"
+        echo "  b       restaurar de um backup"
+        echo "  a       configurar só o Apache/HTTPS (Let's Encrypt)"
+        read -r -p "Escolha: " CHOICE < /dev/tty
     fi
 
-    case "$PREFLIGHT_CHOICE" in
-        2)
-            echo "Isto vai [HOST] PARAR e REMOVER os containers do subot e APAGAR $INSTALL_DIR."
+    case "$CHOICE" in
+        r|R)
+            echo "Isto vai PARAR e REMOVER os containers do subot e APAGAR $INSTALL_DIR."
             read -r -p "Digite 'yes' para confirmar: " CONFIRM < /dev/tty
-            if [ "$CONFIRM" != "yes" ]; then
-                echo "abortado."
+            [ "$CONFIRM" = "yes" ] || { echo "abortado."; exit 1; }
+            [ -f "$INSTALL_DIR/docker-compose.yml" ] && (cd "$INSTALL_DIR" && docker compose down) || true
+            rm -rf "$INSTALL_DIR"
+            ;;
+        b|B)
+            if [ ! -d "$INSTALL_DIR/backups" ]; then
+                echo "$INSTALL_DIR/backups não existe — copie um backup .tar.gz pra lá e rode de novo."
                 exit 1
             fi
-            if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
-                log "[HOST] docker compose down (em $INSTALL_DIR)"
-                (cd "$INSTALL_DIR" && docker compose down) || true
+            mapfile -t BACKUPS < <(ls -1 "$INSTALL_DIR"/backups/subot-env-backup-*.tar.gz 2>/dev/null || true)
+            if [ ${#BACKUPS[@]} -eq 0 ]; then
+                echo "nenhum backup encontrado em $INSTALL_DIR/backups."
+                exit 1
             fi
-            log "[HOST] removendo $INSTALL_DIR"
-            rm -rf "$INSTALL_DIR"
-            EXISTING_DIR=false
-            ;;
-        3)
-            echo "Backups disponíveis em $INSTALL_DIR/backups:"
-            echo "${EXISTING_BACKUPS:-  nenhum encontrado}"
-            echo ""
-            echo "Rode manualmente, no HOST:"
-            echo "  cd $INSTALL_DIR"
-            echo "  docker compose down"
-            echo "  bash scripts/restore.sh <arquivo.tar.gz>"
-            echo "  docker compose up -d"
+            echo "Backups disponíveis:"
+            select BK in "${BACKUPS[@]}"; do
+                [ -n "${BK:-}" ] && break
+            done < /dev/tty
+            cd "$INSTALL_DIR"
+            docker compose down
+            bash scripts/restore.sh "$BK"
+            docker compose up -d
+            echo "restaurado. Se o backup incluía a chave SSH, exporte SUBOT_SSH_KEY_PASSPHRASE"
+            echo "(a passphrase guardada quando ela foi gerada) e rode 'docker compose up -d' de novo."
             exit 0
             ;;
-        4)
-            if [ -f "$INSTALL_DIR/scripts/menu.sh" ]; then
-                cd "$INSTALL_DIR"
-                exec bash scripts/menu.sh
-            else
-                echo "$INSTALL_DIR/scripts/menu.sh não encontrado (instalação incompleta?) — escolha" >&2
-                echo "outra opção ou rode a instalação primeiro." >&2
-                exit 1
-            fi
-            ;;
-        5)
-            echo "cancelado, nada foi alterado."
+        a|A)
+            cd "$INSTALL_DIR"
+            bash scripts/init-letsencrypt.sh
             exit 0
             ;;
         *)
-            log "prosseguindo com atualização da instalação existente"
+            log "atualizando instalação existente"
             ;;
     esac
 fi
@@ -174,28 +149,41 @@ cd "$INSTALL_DIR"
 
 log "rodando scripts/setup.sh (gera .env, hosts.yaml, chaves SSH, credenciais — nunca sobrescreve o que já existe)"
 echo "    ATENÇÃO: se este for o primeiro setup, uma passphrase da chave SSH vai aparecer abaixo"
-echo "    UMA VEZ — copie e guarde antes de continuar, ela não fica salva em nenhum arquivo."
-bash scripts/setup.sh
+echo "    UMA VEZ — copie e guarde num lugar seguro (gerenciador de senhas). Ela já é usada"
+echo "    automaticamente nesta execução; só vai fazer falta digitá-la de novo numa reinstalação"
+echo "    ou restauração futura."
+# 'source' (não 'bash scripts/setup.sh') de propósito: setup.sh gera a passphrase numa variável
+# de shell, e sourcing deixa essa variável disponível aqui, no MESMO processo — sem escrever a
+# passphrase em nenhum arquivo, e sem precisar de um segundo 'docker compose up' manual depois.
+GENERATED_SSH_PASSPHRASE=""
+# shellcheck disable=SC1091
+source scripts/setup.sh
+if [ -n "$GENERATED_SSH_PASSPHRASE" ]; then
+    export SUBOT_SSH_KEY_PASSPHRASE="$GENERATED_SSH_PASSPHRASE"
+fi
 
-log "[HOST] subindo a stack (docker compose up -d)"
+log "subindo a stack (docker compose up -d)"
 docker compose up -d
+
+log "baixando modelos locais do Ollama (pode demorar alguns minutos)"
+bash scripts/pull-models.sh || echo "    falhou — rode 'bash scripts/pull-models.sh' depois pra tentar de novo."
+
+log "projetando agents/*.md para o formato do Claude Code (.claude/agents/)"
+python3 scripts/sync-claude-agents.py
+
+log "checklist de saúde"
+bash scripts/healthcheck.sh || true
 
 cat <<EOF
 
 ==> subot está de pé em ${INSTALL_DIR}
 
-IMPORTANTE: se uma passphrase de chave SSH apareceu acima (primeira instalação), este primeiro
-'docker compose up -d' subiu ANTES dela existir no ambiente — os containers estão de pé, mas
-toda operação SSH vai falhar até você, no HOST, rodar:
-  export SUBOT_SSH_KEY_PASSPHRASE='<a passphrase que apareceu acima>'
-  docker compose up -d
-(o menu abaixo tem uma opção pra confirmar se isso já está OK.)
-
-Restaurando dados de outra instância em vez de uma instalação nova? Pare a stack agora
-('docker compose down'), rode 'bash scripts/restore.sh <arquivo.tar.gz>' e suba de novo antes de
-usar o menu abaixo.
+- Se uma passphrase de chave SSH apareceu acima, guarde-a agora num lugar seguro — ela não fica
+  salva em nenhum arquivo, e só volta a fazer falta numa reinstalação ou restauração de backup.
+- Pra expor publicamente com HTTPS: preencha SUBOT_DOMAIN e SUBOT_LETSENCRYPT_EMAIL em .env (DNS
+  já apontando pra esta máquina) e rode este instalador de novo, escolhendo a opção 'a'
+  (ou direto: bash scripts/init-letsencrypt.sh).
+- Pra reinstalar do zero ou restaurar de um backup: rode este instalador de novo.
 
 Documentação completa: ${INSTALL_DIR}/README.md
 EOF
-
-bash scripts/menu.sh

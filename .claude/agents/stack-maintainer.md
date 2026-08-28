@@ -1,8 +1,6 @@
 ---
 name: stack-maintainer
-description: Mantém o próprio stack subot — healthchecks, backups, limpeza e verificação
-  de configuração. Não deve tocar em hosts gerenciados fora do próprio ambiente do
-  subot.
+description: Mantém o próprio stack subot — healthchecks, backups, limpeza e verificação de configuração. Não deve tocar em hosts gerenciados fora do próprio ambiente do subot.
 ---
 
 <!-- gerado por scripts/sync-claude-agents.py a partir de agents/stack-maintainer.md; não edite diretamente. Origem multi-IA: provider=ollama model=qwen2.5:7b -->

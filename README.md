@@ -199,12 +199,18 @@ python3 scripts/sync-claude-agents.py   # projeta agents/*.md -> .claude/agents/
 
 Neste ponto o `reverse-proxy` fica reiniciando em loop (`restart: unless-stopped`) — ele não sobe
 sem *algum* certificado em `SSLCertificateFile`, e ainda não existe nenhum. Isso não afeta os
-outros serviços (guacamole, subot-api e subot-agent funcionam normalmente por trás dele). Resolva
-rodando:
+outros serviços (guacamole, subot-api e subot-agent funcionam normalmente por trás dele; só não
+dá pra acessá-los de fora ainda, já que só o `reverse-proxy` publica porta no host). Resolva com
+um dos dois:
 
 ```bash
-# preencha SUBOT_DOMAIN (DNS já apontando pro IP público da VM) e SUBOT_LETSENCRYPT_EMAIL em .env
+# Já tem domínio com DNS apontando pra esta VM (produção):
+# preencha SUBOT_DOMAIN e SUBOT_LETSENCRYPT_EMAIL em .env
 bash scripts/init-letsencrypt.sh
+
+# Ainda não tem domínio, só quer testar localmente (gera certificado autoassinado — o navegador
+# vai avisar que não é confiável, é esperado; troque pelo Let's Encrypt acima quando tiver domínio):
+bash scripts/self-signed-cert.sh
 ```
 
 - GUI (Guacamole): `https://SEU_DOMINIO/guacamole/` (usuário/senha em `.env`,

@@ -6,7 +6,18 @@
 # dependências extras) — roda direto no host, sem precisar entrar em nenhum container.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-set -a; [ -f .env ] && source .env; set +a
+
+# NÃO usar 'source .env' aqui — bash executa o arquivo como código nesse caso, e qualquer valor
+# com '$' (ex.: um hash bcrypt tipo '$2a$14$...') vira expansão de parâmetro em vez de texto
+# literal, quebrando com 'unbound variable'. Lê como dado (read), nunca como código.
+if [ -f .env ]; then
+    set -a
+    while IFS='=' read -r key value; do
+        case "$key" in ''|'#'*) continue ;; esac
+        export "$key=$value"
+    done < .env
+    set +a
+fi
 
 GUAC_URL="http://localhost:8080/guacamole"
 GUAC_USER="${GUACAMOLE_ADMIN_USER:-guacadmin}"

@@ -3,8 +3,6 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-[ -f .env ] && set -a && source .env && set +a
-
 FAIL=0
 
 echo "==> docker compose ps"

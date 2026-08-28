@@ -3,6 +3,11 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/install.sh | bash
 #
+# Repositório PRIVADO: a linha acima só funciona se o repo virar público. Enquanto for privado,
+# busque este arquivo via 'gh api repos/mantenedor/subot/contents/install.sh --jq .download_url'
+# (link raw com token temporário) e exporte SUBOT_REPO_URL com um token de escopo 'repo' embutido
+# (https://x-access-token:<TOKEN>@github.com/mantenedor/subot.git) antes de rodar — ver README.
+#
 # Idempotente: se o diretório de destino já for um clone do subot, faz 'git pull' em vez de
 # clonar de novo. Nunca sobrescreve .env / secrets/ / config/hosts.yaml existentes —
 # scripts/setup.sh já preserva tudo isso.

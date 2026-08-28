@@ -183,16 +183,30 @@ reavaliar o dimensionamento nesse momento em vez de superdimensionar CPU/RAM hoj
 
 ## Deploy em uma VM nova (um comando)
 
+O repositório é **privado** — isso muda o comando em dois pontos: como você busca o próprio
+`install.sh` e como o `install.sh` clona o repositório (o `git clone` interno dele também exige
+credencial). Nenhum dos dois funciona anônimo.
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<OWNER>/subot/main/install.sh | bash
+# 1. Busque o install.sh via um link "raw" com token temporário (gerado por você, expira em
+#    pouco tempo — regenere se precisar rodar de novo depois de um tempo):
+#    gh api repos/mantenedor/subot/contents/install.sh --jq .download_url
+
+# 2. Dê ao install.sh uma forma de clonar o repo privado (token com escopo 'repo'; PAT criado
+#    em github.com/settings/tokens, ou 'gh auth token' se tiver o gh CLI autenticado na VM):
+export SUBOT_REPO_URL="https://x-access-token:<SEU_TOKEN>@github.com/mantenedor/subot.git"
+
+# 3. Rode o instalador buscando pelo link "raw" do passo 1:
+curl -fsSL "<link-raw-com-token-do-passo-1>" | bash
 ```
 
-Faz tudo: checa/instala Docker, clona o repositório, roda `scripts/setup.sh` e sobe a stack. É
-idempotente — rodar de novo atualiza (`git pull`) em vez de duplicar, e nunca sobrescreve
-`.env`/`secrets/`/`config/hosts.yaml` já existentes. Ajustável via `SUBOT_REPO_URL`,
-`SUBOT_REPO_REF` e `SUBOT_INSTALL_DIR` (variáveis de ambiente antes do `curl | bash`, ou
-exportadas antes de rodar `install.sh` localmente). **Troque `<OWNER>` pela sua org/usuário real do
-GitHub assim que publicar o repositório** — o script recusa rodar enquanto isso for só o placeholder.
+Se o repositório se tornar público no futuro, os passos 1 e 2 somem e vira só
+`curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/install.sh | bash`.
+
+O `install.sh` faz o resto: checa/instala Docker, clona o repositório, roda `scripts/setup.sh` e
+sobe a stack. É idempotente — rodar de novo atualiza (`git pull`) em vez de duplicar, e nunca
+sobrescreve `.env`/`secrets/`/`config/hosts.yaml` já existentes. Ajustável via `SUBOT_REPO_URL`,
+`SUBOT_REPO_REF` e `SUBOT_INSTALL_DIR`.
 
 Restaurando uma instância existente numa VM nova? Rode o `install.sh` acima primeiro (traz a
 ferramenta do zero), depois `docker compose down`, `bash scripts/restore.sh <backup.tar.gz>` e

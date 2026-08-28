@@ -76,8 +76,11 @@ services:
       POSTGRES_DATABASE: ${GUACDB_DATABASE:-guacamole_db}
       POSTGRES_USER: ${GUACDB_USER:-guacamole}
       POSTGRES_PASSWORD: ${GUACDB_PASSWORD:?defina GUACDB_PASSWORD em .env — rode scripts/setup.sh}
-    # Sem 'ports:' — não é publicada diretamente no host. O único ponto de entrada público é o
-    # serviço 'caddy', que fala com esta em http://guacamole:8080 dentro da rede subot_net.
+    # Publicada direto em 8080 (HTTP puro, sem TLS) por decisão explícita — enquanto isso, o
+    # 'caddy' também fala com esta em http://guacamole:8080 dentro da rede subot_net, então dá
+    # pra acessar tanto direto (http://IP:8080/guacamole/) quanto via Caddy (https://IP/guacamole/).
+    ports:
+      - "8080:8080"
     networks: [subot_net]
     mem_limit: 512m
 

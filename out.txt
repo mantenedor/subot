@@ -1,0 +1,16 @@
+OK (paths obrigatórios) | há achados de revisão manual (ver abaixo) — não bloqueiam push, mas confira
+Paths obrigatórios (devem estar ignorados E não rastreados):
+  [OK] secrets/
+  [OK] data/
+  [OK] .env
+  [OK] config/hosts.yaml
+
+Varredura por nome suspeito entre arquivos já rastreados (revisão manual — não bloqueia push):
+  [REVISAR] .env.example
+  [REVISAR] packages/subot_core/subot_core/secrets.py
+
+4 achado(s) em 66 arquivo(s) (escopo: all):
+  [ip privada/interna — confirme que não é topologia real antes de publicar] config\hosts.yaml.example:15 — ip_address — 10.0.0.11
+  [ip privada/interna — confirme que não é topologia real antes de publicar] config\hosts.yaml.example:24 — ip_address — 10.0.0.21
+  [ip privada/interna — confirme que não é topologia real antes de publicar] config\hosts.yaml.example:33 — ip_address — 10.0.0.31
+  [ip privada/interna — confirme que não é topologia real antes de publicar] config\hosts.yaml.example:49 — ip_address — 10.0.0.99

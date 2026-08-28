@@ -63,14 +63,19 @@ Guacamole (a camada de acesso via navegador); Ollama e a API REST rodam **dentro
 |---|---|
 | `guac-db` | Banco Postgres do Guacamole (usuários, conexões, histórico) |
 | `guacd` | Daemon proxy do Guacamole (fala RDP/VNC/SSH de verdade) |
-| `guacamole` | Gateway web HTML5 — GUI remota, com gravação de sessão nativa (sem porta publicada) |
+| `guacamole` | Gateway web HTML5 — GUI remota, com gravação de sessão nativa. **Publicada em `8080` (HTTP puro, sem TLS) por decisão explícita**, além de acessível via `caddy` |
 | `agent` (container `subot-agent-1`) | Claude Code + `subot_orchestrator` + servidores MCP + **Ollama** (processo em background) + **API REST** (processo em background) — o "cérebro" único da stack (sem porta publicada) |
-| `caddy` | **Único** container que publica portas no host (80/443); termina TLS sozinho (Let's Encrypt automático, ou certificado local se não houver domínio) |
+| `caddy` | Publica 80/443 no host; termina TLS (Let's Encrypt automático, ou certificado local se não houver domínio) |
 
-Todos na rede dedicada `subot_net`. `guacamole` e a API (dentro do `agent`) não são publicadas
-diretamente no host: só são alcançáveis através do `caddy` ou de dentro da rede `subot_net` —
-reduz a superfície de ataque de um bastião de infraestrutura a um único ponto de entrada público
-auditável.
+Todos na rede dedicada `subot_net`. A API (dentro do `agent`) não é publicada diretamente no
+host: só é alcançável através do `caddy` ou de dentro da rede `subot_net`. O Guacamole **é**
+publicado diretamente em `8080` sem TLS (opção deliberada enquanto o TLS via Caddy é validado —
+ver aviso de segurança abaixo), então a stack hoje tem dois pontos de entrada público: `8080`
+(Guacamole puro) e `caddy` em `80`/`443` (Guacamole + API, com TLS).
+
+> **Aviso de segurança**: `8080` serve Guacamole sem HTTPS — login e tudo mais trafegam em texto
+> claro nessa porta. Adequado para debug/rede confiável; feche essa porta (remova `ports:` do
+> `guacamole` em `docker-compose.yml`) antes de expor a VM a uma rede não confiável de verdade.
 
 **Por que 5 containers, não 8**: a primeira versão deste projeto tinha `ollama`, `api` e
 `reverse-proxy`+`certbot` como containers próprios. Revisão de escopo: Ollama e a API REST viraram

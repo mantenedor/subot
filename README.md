@@ -176,6 +176,18 @@ duplicar, e nunca sobrescreve `.env`/`secrets/`/`config/hosts.yaml` já existent
 `SUBOT_REPO_URL`, `SUBOT_REPO_REF` e `SUBOT_INSTALL_DIR` (esta última sobrescreve o destino padrão
 `./subot`, aceitando um caminho absoluto se quiser instalar em outro lugar independente do `cd`).
 
+No final, o `install.sh` abre um **menu interativo** (`scripts/menu.sh`) com os passos que
+sobraram — baixar modelos do Ollama, configurar HTTPS/Let's Encrypt, checklist de saúde, conferir
+se a passphrase da chave SSH está ativa, etc. Cada opção do menu diz explicitamente, antes de
+rodar, se o comando executa **no host** ou **dentro de um container** (via `docker compose
+exec`/`run`) — rode `bash scripts/menu.sh` a qualquer momento depois pra voltar a ele.
+
+No **início**, o `install.sh` também detecta instalação/containers/imagens/modelos já existentes
+(em qualquer diretório — os containers são identificados pelo nome do projeto compose `subot`,
+não pelo caminho) e, se achar algo, pergunta interativamente: atualizar a instalação existente,
+recriar do zero (destrutivo, pede confirmação escrita), restaurar de um backup, ou só abrir o
+menu de próximos passos direto.
+
 Restaurando uma instância existente numa VM nova? Rode o `install.sh` acima primeiro (traz a
 ferramenta do zero), depois `docker compose down`, `bash scripts/restore.sh <backup.tar.gz>` e
 `docker compose up -d` de novo.
@@ -189,6 +201,9 @@ docker compose up -d
 bash scripts/pull-models.sh    # baixa os modelos locais default no Ollama (qwen2.5:14b e 7b)
 python3 scripts/sync-claude-agents.py   # projeta agents/*.md -> .claude/agents/*.md
 ```
+
+Ou, em vez das últimas duas linhas, `bash scripts/menu.sh` pra fazer isso (e o resto: TLS,
+healthcheck) por um menu interativo — mesmo menu que o `install.sh` abre no final.
 
 Neste ponto o `reverse-proxy` fica reiniciando em loop (`restart: unless-stopped`) — ele não sobe
 sem *algum* certificado em `SSLCertificateFile`, e ainda não existe nenhum. Isso não afeta os

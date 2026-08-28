@@ -8,9 +8,11 @@
 # (link raw com token temporário) e exporte SUBOT_REPO_URL com um token de escopo 'repo' embutido
 # (https://x-access-token:<TOKEN>@github.com/mantenedor/subot.git) antes de rodar.
 #
-# Idempotente: se o diretório de destino já for um clone do subot, faz 'git pull' em vez de
-# clonar de novo. Nunca sobrescreve .env / secrets/ / config/hosts.yaml existentes —
-# scripts/setup.sh já preserva tudo isso.
+# Idempotente: se detectar instalação/containers/imagens/modelos já existentes (em QUALQUER
+# diretório, não só no destino atual), pergunta interativamente o que fazer — atualizar, recriar
+# do zero (destrutivo, com confirmação), restaurar de um backup, ou só abrir o menu de próximos
+# passos. Nunca sobrescreve .env / secrets/ / config/hosts.yaml existentes — scripts/setup.sh já
+# preserva tudo isso.
 #
 # Variáveis de ambiente que ajustam o comportamento (opcional):
 #   SUBOT_REPO_URL   URL do repositório git (default: aponte para o seu fork/org antes de publicar)
@@ -54,6 +56,98 @@ if ! docker compose version >/dev/null 2>&1; then
     exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# [HOST] Detecta instalação/containers/imagens/modelos já existentes ANTES de clonar/subir
+# qualquer coisa. Containers/imagens são detectados globalmente (pelo nome do projeto compose
+# 'subot', fixo em docker-compose.yml via 'name:'), então isso pega até instalações abandonadas
+# em outro diretório (ex.: uma tentativa anterior em /root enquanto agora se instala em /opt).
+# ---------------------------------------------------------------------------
+EXISTING_DIR=false
+[ -d "$INSTALL_DIR/.git" ] && EXISTING_DIR=true
+
+EXISTING_CONTAINERS="$(docker ps -a --filter "label=com.docker.compose.project=subot" --format '{{.Names}} ({{.Status}})' 2>/dev/null || true)"
+EXISTING_IMAGES="$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -E '^subot-(subot-)?(agent|api)' || true)"
+
+OLLAMA_CONTAINER="$(docker ps --filter "label=com.docker.compose.project=subot" --filter "label=com.docker.compose.service=ollama" --format '{{.Names}}' 2>/dev/null | head -1 || true)"
+EXISTING_MODELS=""
+if [ -n "$OLLAMA_CONTAINER" ]; then
+    EXISTING_MODELS="$(docker exec "$OLLAMA_CONTAINER" ollama list 2>/dev/null | tail -n +2 | awk '{print $1}' | paste -sd ', ' - 2>/dev/null || true)"
+fi
+
+EXISTING_BACKUPS=""
+[ -d "$INSTALL_DIR/backups" ] && EXISTING_BACKUPS="$(ls -1 "$INSTALL_DIR/backups"/subot-env-backup-*.tar.gz 2>/dev/null || true)"
+
+if $EXISTING_DIR || [ -n "$EXISTING_CONTAINERS" ] || [ -n "$EXISTING_IMAGES" ]; then
+    echo ""
+    echo "==> [HOST] estado existente detectado:"
+    echo "    diretório $INSTALL_DIR já é um clone do subot: $([ "$EXISTING_DIR" = true ] && echo sim || echo não)"
+    echo "    containers do subot (docker, em qualquer diretório): ${EXISTING_CONTAINERS:-nenhum}"
+    echo "    imagens já construídas (subot-agent/subot-api): ${EXISTING_IMAGES:-nenhuma}"
+    echo "    modelos do Ollama já baixados: ${EXISTING_MODELS:-nenhum (ou o container ollama não está rodando)}"
+    echo "    backups disponíveis em $INSTALL_DIR/backups: ${EXISTING_BACKUPS:-nenhum}"
+    echo ""
+
+    if [ -r /dev/tty ]; then
+        echo "O que você quer fazer?"
+        echo "  1) Atualizar a instalação existente [HOST: git pull + docker compose up -d] (recomendado)"
+        echo "  2) Recriar do zero — PARA e REMOVE containers/dados atuais, clona de novo [HOST] (destrutivo)"
+        echo "  3) Restaurar a partir de um backup existente [HOST]"
+        echo "  4) Só abrir o menu de próximos passos (modelos, reverse proxy, healthcheck...) [HOST]"
+        echo "  5) Cancelar, não fazer nada"
+        read -r -p "Escolha [1-5]: " PREFLIGHT_CHOICE < /dev/tty
+    else
+        echo "Sem terminal interativo (stdin ocupado pelo próprio script, ou rodando sem TTY) —"
+        echo "assumindo opção 1 (atualizar instalação existente)."
+        PREFLIGHT_CHOICE=1
+    fi
+
+    case "$PREFLIGHT_CHOICE" in
+        2)
+            echo "Isto vai [HOST] PARAR e REMOVER os containers do subot e APAGAR $INSTALL_DIR."
+            read -r -p "Digite 'yes' para confirmar: " CONFIRM < /dev/tty
+            if [ "$CONFIRM" != "yes" ]; then
+                echo "abortado."
+                exit 1
+            fi
+            if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+                log "[HOST] docker compose down (em $INSTALL_DIR)"
+                (cd "$INSTALL_DIR" && docker compose down) || true
+            fi
+            log "[HOST] removendo $INSTALL_DIR"
+            rm -rf "$INSTALL_DIR"
+            EXISTING_DIR=false
+            ;;
+        3)
+            echo "Backups disponíveis em $INSTALL_DIR/backups:"
+            echo "${EXISTING_BACKUPS:-  nenhum encontrado}"
+            echo ""
+            echo "Rode manualmente, no HOST:"
+            echo "  cd $INSTALL_DIR"
+            echo "  docker compose down"
+            echo "  bash scripts/restore.sh <arquivo.tar.gz>"
+            echo "  docker compose up -d"
+            exit 0
+            ;;
+        4)
+            if [ -f "$INSTALL_DIR/scripts/menu.sh" ]; then
+                cd "$INSTALL_DIR"
+                exec bash scripts/menu.sh
+            else
+                echo "$INSTALL_DIR/scripts/menu.sh não encontrado (instalação incompleta?) — escolha" >&2
+                echo "outra opção ou rode a instalação primeiro." >&2
+                exit 1
+            fi
+            ;;
+        5)
+            echo "cancelado, nada foi alterado."
+            exit 0
+            ;;
+        *)
+            log "prosseguindo com atualização da instalação existente"
+            ;;
+    esac
+fi
+
 # Sem terminal pra digitar usuário/senha num 'curl | bash' — falha rápido com uma mensagem clara
 # em vez de o git ficar pendurado esperando um prompt interativo que nunca vem.
 export GIT_TERMINAL_PROMPT=0
@@ -83,25 +177,25 @@ echo "    ATENÇÃO: se este for o primeiro setup, uma passphrase da chave SSH v
 echo "    UMA VEZ — copie e guarde antes de continuar, ela não fica salva em nenhum arquivo."
 bash scripts/setup.sh
 
-log "subindo a stack (docker compose up -d)"
+log "[HOST] subindo a stack (docker compose up -d)"
 docker compose up -d
 
 cat <<EOF
 
 ==> subot está de pé em ${INSTALL_DIR}
 
-Próximos passos:
-  1. Se apareceu uma passphrase de chave SSH acima, rode agora:
-       export SUBOT_SSH_KEY_PASSPHRASE='<a passphrase que apareceu>'
-       docker compose up -d
-     (sem isso os containers sobem, mas toda operação SSH falha até você fazer isso)
-  2. bash scripts/pull-models.sh          # baixa os modelos locais do Ollama (qwen2.5:14b / 7b)
-  3. python3 scripts/sync-claude-agents.py
-  4. Para expor publicamente com TLS: preencha SUBOT_DOMAIN e SUBOT_LETSENCRYPT_EMAIL em .env
-     (DNS já apontando pra esta máquina) e rode:
-       bash scripts/init-letsencrypt.sh
-  5. Restaurando dados de outra instância? Pare a stack ('docker compose down'), rode
-     'bash scripts/restore.sh <arquivo.tar.gz>' e suba de novo.
+IMPORTANTE: se uma passphrase de chave SSH apareceu acima (primeira instalação), este primeiro
+'docker compose up -d' subiu ANTES dela existir no ambiente — os containers estão de pé, mas
+toda operação SSH vai falhar até você, no HOST, rodar:
+  export SUBOT_SSH_KEY_PASSPHRASE='<a passphrase que apareceu acima>'
+  docker compose up -d
+(o menu abaixo tem uma opção pra confirmar se isso já está OK.)
+
+Restaurando dados de outra instância em vez de uma instalação nova? Pare a stack agora
+('docker compose down'), rode 'bash scripts/restore.sh <arquivo.tar.gz>' e suba de novo antes de
+usar o menu abaixo.
 
 Documentação completa: ${INSTALL_DIR}/README.md
 EOF
+
+bash scripts/menu.sh

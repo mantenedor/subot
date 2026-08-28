@@ -52,12 +52,26 @@ if ! docker compose version >/dev/null 2>&1; then
     exit 1
 fi
 
+# Sem terminal pra digitar usuário/senha num 'curl | bash' — falha rápido com uma mensagem clara
+# em vez de o git ficar pendurado esperando um prompt interativo que nunca vem.
+export GIT_TERMINAL_PROMPT=0
+
 if [ -d "$INSTALL_DIR/.git" ]; then
     log "diretório existente em $INSTALL_DIR — atualizando (git pull)"
-    git -C "$INSTALL_DIR" pull --ff-only
+    if ! git -C "$INSTALL_DIR" pull --ff-only; then
+        echo "git pull falhou — se o repositório é privado, SUBOT_REPO_URL precisa ter um token" >&2
+        echo "embutido (https://x-access-token:<TOKEN>@github.com/...) — ver README." >&2
+        exit 1
+    fi
 else
     log "clonando $REPO_URL (ref: $REPO_REF) em $INSTALL_DIR"
-    git clone --branch "$REPO_REF" --depth 1 "$REPO_URL" "$INSTALL_DIR"
+    if ! git clone --branch "$REPO_REF" --depth 1 "$REPO_URL" "$INSTALL_DIR"; then
+        echo "git clone falhou — se o repositório é privado, exporte SUBOT_REPO_URL com um token" >&2
+        echo "embutido ANTES deste comando:" >&2
+        echo "  export SUBOT_REPO_URL='https://x-access-token:<TOKEN>@github.com/mantenedor/subot.git'" >&2
+        echo "(token com escopo 'repo' — ver README, seção 'Deploy em uma VM nova')." >&2
+        exit 1
+    fi
 fi
 
 cd "$INSTALL_DIR"

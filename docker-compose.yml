@@ -104,6 +104,13 @@ services:
       - ./data/audit:/opt/subot/data/audit
       - ./data/agent-home:/home/subot
       - ./data/ollama-models:/home/subot/.ollama
+      # projeto inteiro (com .git) montado no home do usuário — dá pro Claude Code (ou qualquer IA)
+      # rodando no console SSH trabalhar direto no repositório real, git status/commit/push
+      # incluídos, sem precisar clonar uma cópia separada dentro do container.
+      - .:/home/subot/subot
+      # a chave privada do bastião continua só leitura mesmo dentro dessa cópia do repo — mount
+      # mais específico sobrepõe o mount acima só para este subdiretório.
+      - ./secrets/ssh:/home/subot/subot/secrets/ssh:ro
     # API REST (uvicorn, porta 8081) não é publicada em lugar nenhum — só alcançável de dentro da
     # rede subot_net (ex.: 'docker compose exec agent curl localhost:8081/health') até que algum
     # proxy volte a ficar na frente dela. Ver README, "Fora de escopo".

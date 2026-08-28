@@ -1,0 +1,43 @@
+# Registro de provedores de IA disponíveis para os agentes em ./agents/*.md.
+#
+# 'ollama' roda dentro do próprio compose (serviço 'ollama') e não exige nenhuma chave — é o
+# caminho 100% local e o default do subot. Os demais são opcionais: só ficam utilizáveis quando a
+# variável de ambiente correspondente (.env) é preenchida. Um agente pode declarar qualquer um
+# destes ids no seu campo `provider`, e alternar de IA é só trocar esse campo (ou usar `fallback`
+# para cair automaticamente em outro se o primário falhar).
+providers:
+  ollama:
+    type: ollama
+    base_url: ${OLLAMA_BASE_URL:-http://ollama:11434}
+    # CPU-only: qwen2.5:32b é tecnicamente utilizável mas costuma rodar poucos tokens/s numa CPU,
+    # o que estoura o loop de tool-calling dos agentes. 14b é o equilíbrio recomendado sem GPU;
+    # troque para 32b (ou maior) se/quando a VM ganhar uma GPU dedicada.
+    default_model: qwen2.5:14b
+
+  lmstudio:
+    type: openai_compat
+    base_url: ${LMSTUDIO_BASE_URL:-}
+    default_model: local-model
+
+  vllm:
+    type: openai_compat
+    base_url: ${VLLM_BASE_URL:-}
+    default_model: ""
+
+  anthropic:
+    type: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+    default_model: claude-sonnet-5
+
+  openai:
+    type: openai
+    api_key_env: OPENAI_API_KEY
+    default_model: gpt-5
+
+  openrouter:
+    type: openai_compat
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    default_model: ""
+
+default: ollama

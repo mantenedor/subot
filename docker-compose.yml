@@ -1,0 +1,181 @@
+name: subot
+
+# Variáveis de ambiente comuns aos containers próprios (subot-agent, subot-api). Reaproveitadas
+# via YAML anchor para não duplicar a lista em cada serviço.
+x-subot-env: &subot-env
+  SUBOT_HOSTS_FILE: /opt/subot/config/hosts.yaml
+  SUBOT_ALLOWLIST_FILE: /opt/subot/config/policy/allowlist.yaml
+  SUBOT_DESTRUCTIVE_FILE: /opt/subot/config/policy/destructive_patterns.yaml
+  SUBOT_SSH_DIR: /opt/subot/secrets/ssh
+  SUBOT_AUDIT_DIR: /opt/subot/data/audit
+  SUBOT_CONFIRM_STORE: /opt/subot/data/audit/.confirm_tokens.json
+  SUBOT_CONFIRM_TOKEN_TTL_SECONDS: ${SUBOT_CONFIRM_TOKEN_TTL_SECONDS:-300}
+  SUBOT_STRICT_KEY_PERMS: ${SUBOT_STRICT_KEY_PERMS:-false}
+  SUBOT_AGENTS_DIR: /opt/subot/agents
+  SUBOT_PROVIDERS_FILE: /opt/subot/config/providers.yaml
+  SUBOT_MCP_SERVERS_DIR: /opt/subot/mcp-servers
+  GUACAMOLE_BASE_URL: http://guacamole:8080/guacamole
+  GUACAMOLE_ADMIN_USER: ${GUACAMOLE_ADMIN_USER:-guacadmin}
+  GUACAMOLE_ADMIN_PASSWORD: ${GUACAMOLE_ADMIN_PASSWORD:-guacadmin}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+  LMSTUDIO_BASE_URL: ${LMSTUDIO_BASE_URL:-}
+  VLLM_BASE_URL: ${VLLM_BASE_URL:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+
+networks:
+  # Rede própria e isolada para comunicação entre os componentes do subot. Segmentação adicional
+  # (ex.: separar frontend/backend em redes distintas) fica como próximo passo — ver README.
+  subot_net:
+    driver: bridge
+
+services:
+  guac-db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${GUACDB_DATABASE:-guacamole_db}
+      POSTGRES_USER: ${GUACDB_USER:-guacamole}
+      POSTGRES_PASSWORD: ${GUACDB_PASSWORD:?defina GUACDB_PASSWORD em .env — rode scripts/setup.sh}
+    volumes:
+      - ./data/guac-db:/var/lib/postgresql/data
+      - ./containers/guacamole/initdb:/docker-entrypoint-initdb.d:ro
+    networks: [subot_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GUACDB_USER:-guacamole}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+
+  guacd:
+    image: guacamole/guacd:1.5.5
+    restart: unless-stopped
+    volumes:
+      - ./data/guac-recordings:/var/lib/guacd/recordings
+    networks: [subot_net]
+    mem_limit: 512m
+
+  guacamole:
+    image: guacamole/guacamole:1.5.5
+    restart: unless-stopped
+    depends_on:
+      guac-db:
+        condition: service_healthy
+      guacd:
+        condition: service_started
+    environment:
+      GUACD_HOSTNAME: guacd
+      POSTGRES_HOSTNAME: guac-db
+      POSTGRES_DATABASE: ${GUACDB_DATABASE:-guacamole_db}
+      POSTGRES_USER: ${GUACDB_USER:-guacamole}
+      POSTGRES_PASSWORD: ${GUACDB_PASSWORD:?defina GUACDB_PASSWORD em .env — rode scripts/setup.sh}
+    # Sem 'ports:' — não é mais publicada diretamente no host. O único ponto de entrada público é
+    # o serviço 'reverse-proxy' (Apache + TLS), que fala com esta em http://guacamole:8080 dentro
+    # da rede subot_net. Para acesso local direto (sem TLS, sem domínio), use
+    # 'docker compose exec' ou publique a porta manualmente em modo debug.
+    networks: [subot_net]
+    mem_limit: 512m
+
+  # Motor de inferência LOCAL padrão — nenhum agente precisa de credencial remota para funcionar.
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ./data/ollama-models:/root/.ollama
+    networks: [subot_net]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    mem_limit: 8g
+
+  # Runtime de agentes: Claude Code (ponto de partida / uso interativo) + subot_orchestrator
+  # (motor multi-IA próprio) + servidores MCP. Sem porta publicada — use 'docker compose exec'.
+  subot-agent:
+    build:
+      context: .
+      dockerfile: containers/agent/Dockerfile
+    restart: unless-stopped
+    depends_on: [ollama, guacamole]
+    environment: *subot-env
+    volumes:
+      - ./config:/opt/subot/config
+      - ./agents:/opt/subot/agents
+      - ./.claude:/opt/subot/.claude
+      - ./mcp-servers:/opt/subot/mcp-servers:ro
+      - ./packages:/opt/subot/packages:ro
+      - ./secrets/ssh:/opt/subot/secrets/ssh:ro
+      - ./data/audit:/opt/subot/data/audit
+      - ./data/agent-home:/home/subot
+    networks: [subot_net]
+    stdin_open: true
+    tty: true
+    mem_limit: 1g
+    cpus: 1.0
+
+  # API REST — mesmas operações de segurança/infra, agnóstica de qual IA está por trás de cada
+  # agente. Usada por humanos/automação fora do Claude Code.
+  subot-api:
+    build:
+      context: .
+      dockerfile: containers/api/Dockerfile
+    restart: unless-stopped
+    depends_on: [ollama]
+    environment: *subot-env
+    volumes:
+      - ./config:/opt/subot/config
+      - ./agents:/opt/subot/agents
+      - ./mcp-servers:/opt/subot/mcp-servers:ro
+      - ./packages:/opt/subot/packages:ro
+      - ./secrets/ssh:/opt/subot/secrets/ssh:ro
+      - ./data/audit:/opt/subot/data/audit
+    # Sem 'ports:' — só reachable via 'reverse-proxy' (protegido por Basic Auth em /api/, além da
+    # confirmação em duas etapas do subot_core) ou de dentro da rede subot_net.
+    networks: [subot_net]
+    mem_limit: 512m
+    cpus: 0.5
+
+  # Único container que publica portas no host — porta de entrada pública da stack. Termina TLS
+  # (Let's Encrypt) e faz proxy reverso para guacamole (/guacamole/, sem auth extra na borda — a
+  # autenticação real é a do próprio Guacamole) e subot-api (/api/, atrás de Basic Auth).
+  reverse-proxy:
+    image: httpd:2.4
+    restart: unless-stopped
+    depends_on: [guacamole, subot-api]
+    environment:
+      SUBOT_DOMAIN: ${SUBOT_DOMAIN:-localhost}
+    volumes:
+      - ./containers/reverse-proxy/httpd.conf.template:/usr/local/apache2/conf/httpd.conf.template:ro
+      - ./containers/reverse-proxy/entrypoint.sh:/entrypoint.sh:ro
+      - ./secrets/tls/letsencrypt:/etc/letsencrypt:ro
+      - ./secrets/reverse-proxy/htpasswd:/usr/local/apache2/conf/htpasswd:ro
+      - ./data/certbot-webroot:/var/www/certbot:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks: [subot_net]
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    mem_limit: 256m
+    cpus: 1.0
+
+  # Renovação automática do certificado Let's Encrypt (a cada 12h tenta renovar; certbot só age
+  # de fato quando o certificado está perto de expirar). A emissão inicial é feita por
+  # scripts/init-letsencrypt.sh, que também usa esta mesma imagem em modo 'run --rm'.
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        trap exit TERM;
+        while :; do
+          certbot renew --webroot -w /var/www/certbot --quiet;
+          sleep 12h & wait $${!};
+        done
+    volumes:
+      - ./secrets/tls/letsencrypt:/etc/letsencrypt
+      - ./data/certbot-webroot:/var/www/certbot
+    mem_limit: 128m

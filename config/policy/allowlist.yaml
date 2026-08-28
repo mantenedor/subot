@@ -1,0 +1,27 @@
+# Comandos classificados como 'safe' rodam imediatamente (exceto em hosts protected/prod, onde
+# viram 'sensitive'). Qualquer comando que não bata em nenhum padrão deste arquivo nem em
+# destructive_patterns.yaml é tratado como 'sensitive' por padrão (fail-closed) — ver
+# PolicyEngine.classify em packages/subot_core/subot_core/policy.py.
+#
+# Padrões podem ser glob (fnmatch, ex: "docker ps*") ou regex prefixado com 're:'.
+safe_patterns:
+  - "whoami"
+  - "hostname"
+  - "uptime"
+  - "df -h*"
+  - "free -h*"
+  - "uname -a"
+  - "systemctl status *"
+  - "docker ps*"
+  - "docker compose ps*"
+  - "cat /etc/os-release"
+  - "re:^tail -n [0-9]+ /var/log/.*"
+
+sensitive_patterns:
+  - "systemctl restart *"
+  - "systemctl reload *"
+  - "docker compose restart*"
+  - "docker restart *"
+  - "apt-get update*"
+  - "apt-get upgrade*"
+  - "re:^kill -[0-9]+ .*"

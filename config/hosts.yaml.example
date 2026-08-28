@@ -1,0 +1,39 @@
+# TEMPLATE — este arquivo é rastreado no git (é a "abstração da ferramenta"). O arquivo real,
+# config/hosts.yaml, é gerado a partir deste por scripts/setup.sh na primeira execução e NUNCA é
+# commitado (está em .gitignore) — o inventário real de hosts é dado de ambiente, não código, e
+# deve ser preservado só via scripts/backup.sh, separado do repositório.
+#
+# Adicione hosts editando config/hosts.yaml diretamente, ou via a skill 'onboard-host' /
+# ferramenta MCP inventory_connector.add_host (que sempre exige confirmação).
+#
+# tags: 'protected' e/ou 'prod' fazem a política tratar até comandos 'safe' como 'sensitive', e
+# transferências de arquivo como 'destructive' — ver packages/subot_core/subot_core/policy.py.
+#
+# Estes são exemplos ilustrativos — serão substituídos pelos seus hosts reais em config/hosts.yaml.
+hosts:
+  example-web-01:
+    address: 10.0.0.11
+    port: 22
+    user: ops
+    protocol: ssh
+    groups: [web, staging]
+    tags: []
+    identity_file: null
+
+  example-db-01:
+    address: 10.0.0.21
+    port: 22
+    user: ops
+    protocol: ssh
+    groups: [db, prod]
+    tags: [protected, prod]
+    identity_file: null
+
+  example-desktop-01:
+    address: 10.0.0.31
+    port: 3389
+    user: administrator
+    protocol: rdp
+    groups: [desktops]
+    tags: []
+    identity_file: null

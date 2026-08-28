@@ -1,0 +1,20 @@
+# 'destructive_patterns': exigem confirmação + motivo, mas são permitidos após aceite explícito.
+# 'blocked_patterns': NUNCA são executados pelo subot, mesmo com confirmação — bloqueio
+# incondicional, última linha de defesa contra acidentes catastróficos.
+destructive_patterns:
+  - "systemctl stop *"
+  - "docker compose down*"
+  - "docker rm *"
+  - "docker volume rm *"
+  - "kubectl delete *"
+  - "re:^rm -rf? .*"
+  - "reboot"
+  - "shutdown *"
+
+blocked_patterns:
+  - "rm -rf /"
+  - "rm -rf /*"
+  - "mkfs*"
+  - "dd if=/dev/zero of=/dev/*"
+  - ":(){ :|:& };:"
+  - "re:.*>\\s*/dev/sd[a-z]\\b.*"

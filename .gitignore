@@ -1,0 +1,35 @@
+# ---- Dados de ambiente (instância) — NUNCA vão para o git. O repositório carrega só a
+# ferramenta; tudo aqui é "insumo de ambiente" e vive exclusivamente nos backups gerados por
+# scripts/backup.sh (ver README, seção "Repositório vs. dados de ambiente"). ----
+
+# chaves SSH, TLS, credenciais do proxy
+secrets/**
+!secrets/ssh/README.md
+
+# volumes persistidos (bancos, gravações, auditoria, modelos, home do agente)
+data/**
+!data/**/.gitkeep
+
+# inventário real de hosts (o .example é que fica versionado)
+config/hosts.yaml
+
+# schema do Guacamole, gerado localmente pelo setup.sh a partir da imagem oficial
+containers/guacamole/initdb/*.sql
+
+backups/
+
+.env
+
+# python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+*.egg-info
+
+# node / claude code
+node_modules/
+
+# sistema
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+# Força LF em texto/scripts independente do core.autocrlf de quem commita — essenciais pra rodar
+# na VM Linux (shebang com \r quebra o interpretador).
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.py text eol=lf
+Dockerfile text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.toml text eol=lf

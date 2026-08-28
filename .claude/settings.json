@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "ssh_connector": {
+      "command": "python3",
+      "args": ["mcp-servers/ssh_connector/server.py"]
+    },
+    "remote_desktop_connector": {
+      "command": "python3",
+      "args": ["mcp-servers/remote_desktop_connector/server.py"]
+    },
+    "inventory_connector": {
+      "command": "python3",
+      "args": ["mcp-servers/inventory_connector/server.py"]
+    },
+    "audit_connector": {
+      "command": "python3",
+      "args": ["mcp-servers/audit_connector/server.py"]
+    }
+  }
+}

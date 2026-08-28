@@ -1,13 +1,13 @@
 # Container único do subot: Claude Code (ponto de partida / uso interativo) + subot_orchestrator
 # (motor multi-IA próprio, local-first) + Ollama (inferência local) + API REST + servidores MCP.
-# Consolidado num container só de propósito — ver docker-compose.yml e README ("por que 5
+# Consolidado num container só de propósito — ver docker-compose.yml e README ("por que 4
 # containers, não 8") para o raciocínio por trás dessa escolha.
 FROM ollama/ollama:latest AS ollama-bin
 
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl ca-certificates gnupg openssh-client dropbear-bin git less procps \
+        curl ca-certificates gnupg openssh-client dropbear-bin sudo git less procps \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g @anthropic-ai/claude-code \
@@ -16,7 +16,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # binário do Ollama copiado da imagem oficial (reprodutível, sem depender de ollama.com no build)
 COPY --from=ollama-bin /bin/ollama /usr/local/bin/ollama
 
-RUN useradd --create-home --uid 1000 --shell /bin/bash subot
+# sudo sem senha só DENTRO deste container — liberdade pra instalar pacotes/configurar/testar via
+# o console SSH (Guacamole) ou 'docker compose exec'. Não dá acesso ao host nem aos outros
+# containers (sem socket do Docker, sem privilégio extra no nível do Docker/kernel).
+RUN useradd --create-home --uid 1000 --shell /bin/bash subot \
+    && echo "subot ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/subot \
+    && chmod 440 /etc/sudoers.d/subot
 
 WORKDIR /opt/subot
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Instalador de um comando só do subot, para uma VM nova:
 #
-#   curl -fsSL https://raw.githubusercontent.com/<OWNER>/subot/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/install.sh | bash
 #
 # Idempotente: se o diretório de destino já for um clone do subot, faz 'git pull' em vez de
 # clonar de novo. Nunca sobrescreve .env / secrets/ / config/hosts.yaml existentes —
@@ -13,19 +13,12 @@
 #   SUBOT_INSTALL_DIR diretório de destino (default: $HOME/subot)
 set -euo pipefail
 
-REPO_URL="${SUBOT_REPO_URL:-https://github.com/OWNER/subot.git}"
+REPO_URL="${SUBOT_REPO_URL:-https://github.com/mantenedor/subot.git}"
 REPO_REF="${SUBOT_REPO_REF:-main}"
 INSTALL_DIR="${SUBOT_INSTALL_DIR:-$HOME/subot}"
 
 log() { printf '==> %s\n' "$1"; }
 require_cmd() { command -v "$1" >/dev/null 2>&1; }
-
-if [[ "$REPO_URL" == *"OWNER/subot"* ]]; then
-    echo "ATENÇÃO: SUBOT_REPO_URL ainda aponta para o placeholder 'OWNER/subot'." >&2
-    echo "         Defina SUBOT_REPO_URL=https://github.com/<sua-org>/<seu-repo>.git antes de rodar," >&2
-    echo "         ou edite este script depois de publicar o repositório real." >&2
-    exit 1
-fi
 
 log "verificando pré-requisitos"
 if ! require_cmd git; then

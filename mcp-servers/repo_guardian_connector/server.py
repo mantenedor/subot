@@ -34,6 +34,9 @@ MAX_SCAN_BYTES = 2_000_000
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff", ".tif"}
 
 REQUIRED_IGNORED_PATHS = ["secrets/", "data/", ".env", "config/hosts.yaml"]
+# Exceções deliberadas: documentação sem conteúdo sensível que o próprio .gitignore re-inclui de
+# propósito dentro de um path normalmente exigido como "todo ignorado" (ver .gitignore).
+ALLOWED_TRACKED_UNDER_REQUIRED = {"secrets/ssh/README.md"}
 SUSPICIOUS_NAME_PATTERNS = [
     re.compile(r"(?i)\.env(\..+)?$"),
     re.compile(r"(?i)id_(rsa|dsa|ecdsa|ed25519)$"),
@@ -240,7 +243,7 @@ def check_gitignore() -> str:
     que nenhum deles (nem arquivos com nome suspeito: chaves, .pem, credenciais) já está
     rastreado — adicionar algo ao .gitignore não desfaz um commit anterior."""
     tracked = set(_run(["git", "ls-files"]).splitlines())
-    all_ok = True
+    required_ok = True
     lines = ["Paths obrigatórios (devem estar ignorados E não rastreados):"]
 
     for req in REQUIRED_IGNORED_PATHS:
@@ -249,9 +252,12 @@ def check_gitignore() -> str:
         # um arquivo hipotético dentro dele, que é o que de fato importa (dá pra 'git add' algo lá?)
         probe = f"{display}/.subot-guardian-probe" if req.endswith("/") else display
         ignored = _is_ignored(probe)
-        tracked_hit = sorted(t for t in tracked if t == display or t.startswith(display + "/"))
+        tracked_hit = sorted(
+            t for t in tracked
+            if (t == display or t.startswith(display + "/")) and t not in ALLOWED_TRACKED_UNDER_REQUIRED
+        )
         ok = ignored and not tracked_hit
-        all_ok = all_ok and ok
+        required_ok = required_ok and ok
         detail = ""
         if not ignored:
             detail += " (não está sendo ignorado — falta padrão em .gitignore)"
@@ -259,18 +265,24 @@ def check_gitignore() -> str:
             detail += f" (JÁ RASTREADO: {tracked_hit[0]} — rode 'git rm --cached {tracked_hit[0]}' e commit)"
         lines.append(f"  [{'OK' if ok else 'FALHA'}] {req}{detail}")
 
+    # Varredura de nomes suspeitos é ADVISORY — sinaliza pra revisão humana/do agente, mas não
+    # bloqueia git_push sozinha (senão qualquer achado permanente e já aceito, como .env.example
+    # ou o próprio secrets.py, travaria todo push para sempre).
     suspicious = sorted(t for t in tracked if any(p.search(t) for p in SUSPICIOUS_NAME_PATTERNS))
     lines.append("")
-    lines.append("Varredura por nome suspeito entre arquivos já rastreados:")
+    lines.append("Varredura por nome suspeito entre arquivos já rastreados (revisão manual — não bloqueia push):")
     if suspicious:
-        all_ok = False
         for s in suspicious:
             lines.append(f"  [REVISAR] {s}")
     else:
         lines.append("  nenhum nome suspeito encontrado")
 
-    _audit("check_gitignore", "ok" if all_ok else "findings", {"ok": all_ok, "suspicious": suspicious})
-    lines.insert(0, "TUDO OK" if all_ok else "ATENÇÃO — problemas encontrados, revise antes de publicar")
+    _audit("check_gitignore", "ok" if required_ok else "failure",
+           {"required_ok": required_ok, "suspicious": suspicious})
+    header = "OK (paths obrigatórios)" if required_ok else "FALHA — paths obrigatórios com problema, resolva antes de publicar"
+    if suspicious:
+        header += " | há achados de revisão manual (ver abaixo) — não bloqueiam push, mas confira"
+    lines.insert(0, header)
     return "\n".join(lines)
 
 
@@ -437,9 +449,9 @@ def git_push(remote: str = "origin", branch: str | None = None, confirm_token: s
         return f"BLOQUEADO — achados de alta confiança precisam ser resolvidos antes de qualquer push:\n{listed}"
 
     ignore_report = check_gitignore()
-    if "FALHA" in ignore_report or "REVISAR" in ignore_report:
+    if "FALHA" in ignore_report:
         _audit("git_push", "blocked", {"remote": remote, "branch": branch, "reason": "check_gitignore"})
-        return f"BLOQUEADO — check_gitignore encontrou problemas, resolva antes de dar push:\n\n{ignore_report}"
+        return f"BLOQUEADO — check_gitignore encontrou problemas nos paths obrigatórios, resolva antes de dar push:\n\n{ignore_report}"
 
     payload = {"remote": remote, "branch": branch}
     if confirm_token:

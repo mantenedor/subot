@@ -263,6 +263,47 @@ versionado no git) e nunca é commitado — é dado de ambiente, preservado só 
 `scripts/backup.sh`. Veja `config/hosts.yaml.example` para o formato e o significado das tags
 `protected`/`prod`.
 
+## Dois usuários por host gerenciado (`subot` / `subotsu`)
+
+Padrão recomendado para hosts remotos geridos pela IA, alinhado com a classificação
+`safe`/`sensitive`/`destructive` do `policy.py` (ver Controles de segurança): em vez de um único
+usuário com sudo irrestrito, cada host gerenciado deve ter **dois usuários Linux**, ambos
+autenticados só pela chave pública do bastião (`secrets/ssh/bastion_id_ed25519.pub`):
+
+| Usuário | Sudo | Uso pretendido |
+|---|---|---|
+| `subot` | Não | Login padrão da IA — comandos `safe`/`sensitive` (leitura, diagnóstico, reinícios de serviço já cobertos pelo allowlist). Sem sudo, um comando mal classificado como `safe` não vira root por engano. |
+| `subotsu` | Sim (`NOPASSWD` restrito ao necessário, não `ALL=(ALL) NOPASSWD:ALL`) | Só para ações `destructive`/que exigem privilégio, e só depois do fluxo de confirmação em duas etapas (`confirm.py`) já ter emitido o `confirm_token`. |
+
+Criar os dois usuários em cada host gerenciado (rode como root/via usuário existente com sudo):
+
+```bash
+# em cada host gerenciado
+useradd --create-home --shell /bin/bash subot
+useradd --create-home --shell /bin/bash subotsu
+
+install -d -m 700 /home/subot/.ssh /home/subotsu/.ssh
+cp /caminho/para/bastion_id_ed25519.pub /home/subot/.ssh/authorized_keys
+cp /caminho/para/bastion_id_ed25519.pub /home/subotsu/.ssh/authorized_keys
+chmod 600 /home/subot/.ssh/authorized_keys /home/subotsu/.ssh/authorized_keys
+chown -R subot:subot /home/subot/.ssh
+chown -R subotsu:subotsu /home/subotsu/.ssh
+
+# sudo do subotsu: prefira listar comandos específicos em vez de ALL — ajuste ao seu caso
+echo 'subotsu ALL=(ALL) NOPASSWD: /usr/bin/systemctl, /usr/bin/apt-get, /usr/bin/docker' \
+    > /etc/sudoers.d/subotsu
+chmod 440 /etc/sudoers.d/subotsu
+```
+
+**Status atual:** `config/hosts.yaml` hoje tem um único campo `user:` por host (ver
+`config/hosts.yaml.example`) — a escolha automática de usuário por classificação de comando ainda
+não existe no `ssh_connector`/`policy.py` (rastreado em Fora de escopo, abaixo). Até essa
+integração nativa existir, use como convenção interina: registre o host duas vezes em
+`config/hosts.yaml`, uma entrada apontando para `user: subot` (endereço normal, para uso do dia a
+dia) e outra, com um sufixo claro (ex.: `meu-host-su`) e a tag `protected`, apontando para
+`user: subotsu` — reservando essa segunda entrada só para quando uma ação exigir confirmação e
+privilégio.
+
 ## Adicionando ou trocando a IA de um agente
 
 Edite (ou crie) um arquivo em `agents/*.md`. Campos obrigatórios: `name`, `description`,
@@ -325,6 +366,9 @@ subot/
   interativo — a arquitetura já suporta isso via `subot_orchestrator`, mas nenhum foi integrado
   nesta primeira entrega.
 - GPU passthrough para o Ollama — ver nota de dimensionamento acima.
+- Seleção automática de usuário (`subot` sem sudo vs. `subotsu` com sudo) por classificação de
+  comando no `ssh_connector`/`policy.py` — hoje é convenção manual via duas entradas em
+  `config/hosts.yaml` (ver "Dois usuários por host gerenciado" acima).
 
 ## Licença
 

@@ -25,7 +25,17 @@ set -euo pipefail
 
 REPO_URL="${SUBOT_REPO_URL:-https://github.com/mantenedor/subot.git}"
 REPO_REF="${SUBOT_REPO_REF:-main}"
-INSTALL_DIR="${SUBOT_INSTALL_DIR:-$PWD/subot}"
+
+# Se o instalador for rodado de dentro de um checkout do subot já existente (ex.: 'cd subot &&
+# bash install.sh' por engano, ou uma sessão do agent com $PWD já na raiz do repo), o default
+# '$PWD/subot' clonaria o repo dentro dele mesmo (subot/subot/, recursivo). Detecta isso checando
+# a marca 'name: subot' no docker-compose.yml do próprio $PWD e reusa $PWD em vez de aninhar.
+if [ -z "${SUBOT_INSTALL_DIR:-}" ] && [ -d "$PWD/.git" ] && [ -f "$PWD/docker-compose.yml" ] \
+    && grep -qx "name: subot" "$PWD/docker-compose.yml"; then
+    INSTALL_DIR="$PWD"
+else
+    INSTALL_DIR="${SUBOT_INSTALL_DIR:-$PWD/subot}"
+fi
 
 log() { printf '==> %s\n' "$1"; }
 require_cmd() { command -v "$1" >/dev/null 2>&1; }

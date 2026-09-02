@@ -1,0 +1,22 @@
+[Unit]
+Description=subot — gate de escalação de privilégio via Telegram (host gerenciado)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# flock garante instância única (evita corrida no offset do getUpdates); o daemon roda como
+# root porque precisa poder executar qualquer comando aprovado, em qualquer parte do filesystem.
+ExecStart=/usr/bin/flock -n /run/subot-gate.lock /opt/subot-gate/bin/subot-gate-daemon.sh
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+# Sem ProtectSystem=/ProtectHome=: o daemon precisa poder escrever em qualquer parte do
+# filesystem para executar um comando já aprovado por um humano (ex.: apt-get upgrade, gestão de
+# usuários em /home). Restringir isso faria comandos aprovados falharem de forma opaca DEPOIS da
+# decisão humana já ter sido tomada — pior do que não ter esse hardening.
+
+[Install]
+WantedBy=multi-user.target

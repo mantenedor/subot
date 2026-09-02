@@ -8,7 +8,7 @@ FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl ca-certificates gnupg openssh-client dropbear-bin sudo git less procps \
-        iputils-ping dnsutils \
+        iputils-ping dnsutils tmux \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g @anthropic-ai/claude-code \
@@ -23,6 +23,18 @@ COPY --from=ollama-bin /bin/ollama /usr/local/bin/ollama
 RUN useradd --create-home --uid 1000 --shell /bin/bash subot \
     && echo "subot ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/subot \
     && chmod 440 /etc/sudoers.d/subot
+
+# Shell de login do 'subot' anexa/cria uma sessão tmux persistente ('-A') em vez de largar direto
+# num bash solto. Sem isso, uma queda do console SSH (Guacamole/dropbear) mata o bash e tudo que
+# roda nele (Claude Code incluso) junto com a sessão — ao reconectar, você caía num processo novo,
+# sem contexto algum. Com tmux, reconectar reanexa ao mesmo processo, com o Claude ainda vivo
+# dentro. 'export SHELL=/bin/bash' evita que os panes internos do tmux tentem reexecutar este
+# mesmo wrapper (o que reentraria em outro tmux dentro do tmux, em loop).
+RUN printf '#!/bin/sh\nexport SHELL=/bin/bash\nexec tmux new-session -A -s work\n' \
+        > /usr/local/bin/subot-console-shell \
+    && chmod +x /usr/local/bin/subot-console-shell \
+    && echo /usr/local/bin/subot-console-shell >> /etc/shells \
+    && usermod --shell /usr/local/bin/subot-console-shell subot
 
 WORKDIR /opt/subot
 

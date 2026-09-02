@@ -91,6 +91,10 @@ services:
     build:
       context: .
       dockerfile: containers/agent/Dockerfile
+    # colhe processos zumbis (tini/docker-init como PID 1) — sem isso, "sleep infinity" nunca faz
+    # wait() nos filhos órfãos e eles se acumulam como <defunct> pra sempre (visto em produção:
+    # 41 zumbis acumulados em ~5 dias, incluindo sessões do claude que caíram).
+    init: true
     restart: unless-stopped
     depends_on: [guacamole]
     environment: *subot-env

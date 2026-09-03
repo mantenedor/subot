@@ -1,4 +1,4 @@
-# subot (Super Bot)
+# subot
 
 Bastião/jump-server de infraestrutura orquestrado por IA: uma stack Docker Compose que dá a
 agentes de IA (Claude Code ou motores locais via Ollama/LM Studio/vLLM) acesso controlado a hosts

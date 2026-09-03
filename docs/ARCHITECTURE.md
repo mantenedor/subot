@@ -148,28 +148,33 @@ VM como não confiável por padrão:
 - Revise `./data/audit/*.jsonl` e as gravações de sessão em `./data/guac-recordings` com
   regularidade (a skill `incident-review` ajuda nisso).
 
-### Dois usuários por host gerenciado (`subot` / `subotsu`) — racional
+### Gate de escalação de privilégio (`managed-host-gate/`)
 
-Padrão recomendado para hosts remotos geridos pela IA, alinhado com a classificação
-`safe`/`sensitive`/`destructive` do `policy.py` (ver Controles de segurança acima): em vez de um
-único usuário com sudo irrestrito, cada host gerenciado deve ter **dois usuários Linux**, ambos
-autenticados só pela chave pública do bastião (`secrets/ssh/bastion_id_ed25519.pub`):
+Substitui o modelo antigo de dois usuários (`subot` sem sudo / `subotsu` com sudo `NOPASSWD`).
+Cada host gerenciado tem só o usuário `subot`, **sem nenhuma entrada de sudo** — todo comando que
+exigiria privilégio passa por um daemon root separado (`bin/subot-gate-daemon.sh`), instalado e
+rodando como serviço systemd no próprio host gerenciado, que bloqueia esperando aprovação humana
+assíncrona via Telegram antes de executar qualquer coisa.
 
-| Usuário | Sudo | Uso pretendido |
-|---|---|---|
-| `subot` | Não | Login padrão da IA — comandos `safe`/`sensitive` (leitura, diagnóstico, reinícios de serviço já cobertos pelo allowlist). Sem sudo, um comando mal classificado como `safe` não vira root por engano. |
-| `subotsu` | Sim (`NOPASSWD` restrito ao necessário, não `ALL=(ALL) NOPASSWD:ALL`) | Só para ações `destructive`/que exigem privilégio, e só depois do fluxo de confirmação em duas etapas (`confirm.py`) já ter emitido o `confirm_token`. |
+**Por que não bastava o `confirm.py` existente:** o fluxo de confirmação em duas etapas de
+`packages/subot_core/subot_core/confirm.py` (`ConfirmationStore.create`/`.consume`, linhas 57 e
+74) é auto-servível pela própria IA — ela gera e consome o `confirm_token` sozinha, no mesmo
+processo, sem nenhum humano ou sistema fora do seu domínio de confiança envolvido. E hoje é a
+própria IA quem escolhe qual usuário (`subot` vs. o antigo `subotsu`) usar, ao decidir qual
+entrada de `hosts.yaml` endereçar no `ssh_exec`. Com Claude Code, MCP servers e a chave SSH
+decifrada rodando no mesmo container, não havia fronteira de privilégio real entre "a IA
+decidindo" e "o código que aplica a política". Instrução do tipo "peça permissão sempre" não é
+controle de segurança contra um agente deliberadamente adversarial — a decisão de autorizar
+precisa sair do domínio de confiança da IA. Daí o gate rodar como processo root **no host
+gerenciado**, fora do container do agent, com o cliente (`subot-gate-request.sh`,
+`bin/subot-gate-request.sh:1`) só conseguindo registrar um pedido no spool e esperar — nunca
+decidir sozinho.
 
-**Status atual:** `config/hosts.yaml` hoje tem um único campo `user:` por host (ver
-`config/hosts.yaml.example`) — a escolha automática de usuário por classificação de comando ainda
-não existe no `ssh_connector`/`policy.py` (rastreado em Fora de escopo, abaixo). Até essa
-integração nativa existir, use como convenção interina: registre o host duas vezes em
-`config/hosts.yaml`, uma entrada apontando para `user: subot` (endereço normal, para uso do dia a
-dia) e outra, com um sufixo claro (ex.: `meu-host-su`) e a tag `protected`, apontando para
-`user: subotsu` — reservando essa segunda entrada só para quando uma ação exigir confirmação e
-privilégio.
+**Modelo de ameaça, segredo do Telegram e o que a permissão `0600` de `telegram.env` protege (e o
+que não protege)**: ver `managed-host-gate/etc/README.md`.
 
-Passos práticos para criar os dois usuários estão no [README](../README.md#dois-usuários-por-host-gerenciado-subot--subotsu).
+**Instalação:** ver [README](../README.md#instalando-o-gate-de-privilégio-no-host-gerenciado-usuário-subot)
+para o passo a passo (`managed-host-gate/install.sh`, rodado como root no host gerenciado).
 
 ## Dimensionamento de VM (CPU-only, escala pequena)
 
@@ -231,6 +236,7 @@ subot/
 ├── config/{hosts.yaml.example,providers.yaml,policy/}   # hosts.yaml (real) é gerado, nunca versionado
 ├── secrets/ssh/                       # NUNCA versionado — dado de ambiente
 ├── data/                              # NUNCA versionado — todos os volumes, como diretórios do host
+├── managed-host-gate/                 # instalador + daemon do gate de privilégio, roda NO HOST GERENCIADO
 ├── install.sh                         # instalador de um comando (curl | bash) para VM nova
 └── scripts/                           # setup, pull-models, sync, backup, restore, rotação de chaves,
                                         # healthcheck
@@ -256,6 +262,6 @@ subot/
   interativo — a arquitetura já suporta isso via `subot_orchestrator`, mas nenhum foi integrado
   nesta primeira entrega.
 - GPU passthrough para o Ollama — ver nota de dimensionamento acima.
-- Seleção automática de usuário (`subot` sem sudo vs. `subotsu` com sudo) por classificação de
-  comando no `ssh_connector`/`policy.py` — hoje é convenção manual via duas entradas em
-  `config/hosts.yaml` (ver "Dois usuários por host gerenciado" acima).
+- Validação automatizada do gate de escalação de privilégio (`managed-host-gate/`) contra um host
+  descartável — ainda não há um script/CI que suba um host de teste e rode
+  `install-gate.sh`/`uninstall-gate.sh` de ponta a ponta; hoje é validação manual.

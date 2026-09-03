@@ -78,38 +78,47 @@ versionado no git) e nunca é commitado — é dado de ambiente, preservado só 
 `scripts/backup.sh`. Veja `config/hosts.yaml.example` para o formato e o significado das tags
 `protected`/`prod`.
 
-## Dois usuários por host gerenciado (`subot` / `subotsu`)
+## Instalando o gate de privilégio no host gerenciado (usuário `subot`)
 
-Padrão recomendado: cada host gerenciado deve ter **dois usuários Linux**, ambos autenticados só
-pela chave pública do bastião (`secrets/ssh/bastion_id_ed25519.pub`) — `subot` (sem sudo, uso
-diário) e `subotsu` (sudo `NOPASSWD` restrito, só para ações que já passaram pela confirmação em
-duas etapas). Racional completo em
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#dois-usuários-por-host-gerenciado-subot--subotsu--racional).
+Cada host gerenciado tem **um único usuário Linux**, `subot`, sem sudo nenhum. Qualquer comando
+que exigiria privilégio passa pelo gate (`managed-host-gate/`) — um daemon root separado que
+bloqueia esperando aprovação humana assíncrona via Telegram antes de executar. Isso substitui o
+modelo antigo de dois usuários (`subot` sem sudo / `subotsu` com sudo `NOPASSWD`); racional
+completo em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#gate-de-escalação-de-privilégio).
 
-Criar os dois usuários em cada host gerenciado (rode como root/via usuário existente com sudo):
+**1. Instalar o gate** — como root, **no host gerenciado** (nunca no bastião/container do agent):
 
 ```bash
-# em cada host gerenciado
-useradd --create-home --shell /bin/bash subot
-useradd --create-home --shell /bin/bash subotsu
-
-install -d -m 700 /home/subot/.ssh /home/subotsu/.ssh
-cp /caminho/para/bastion_id_ed25519.pub /home/subot/.ssh/authorized_keys
-cp /caminho/para/bastion_id_ed25519.pub /home/subotsu/.ssh/authorized_keys
-chmod 600 /home/subot/.ssh/authorized_keys /home/subotsu/.ssh/authorized_keys
-chown -R subot:subot /home/subot/.ssh
-chown -R subotsu:subotsu /home/subotsu/.ssh
-
-# sudo do subotsu: prefira listar comandos específicos em vez de ALL — ajuste ao seu caso
-echo 'subotsu ALL=(ALL) NOPASSWD: /usr/bin/systemctl, /usr/bin/apt-get, /usr/bin/docker' \
-    > /etc/sudoers.d/subotsu
-chmod 440 /etc/sudoers.d/subotsu
+export SUBOT_BASTION_PUBKEY="$(cat secrets/ssh/bastion_id_ed25519.pub)"   # copiado do bastião
+curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/managed-host-gate/install.sh | sudo bash
 ```
 
-**Status atual:** `config/hosts.yaml` só tem um campo `user:` por host — não há seleção
-automática de usuário por classificação de comando ainda. Convenção interina: registre o host
-duas vezes em `config/hosts.yaml` (uma para `user: subot`, outra com sufixo claro, ex.
-`meu-host-su`, tag `protected`, `user: subotsu`).
+Isso cria o usuário `subot`, grava a chave pública do bastião em `~subot/.ssh/authorized_keys`,
+instala o daemon do gate e o serviço systemd, e desativa qualquer `subotsu`/sudoers remanescente
+do modelo antigo. É idempotente (pode rodar de novo sem duplicar nada) e narra/pede confirmação
+a cada passo que muda estado do host (`SUBOT_GATE_ASSUME_YES=1` para automação sem terminal). Ver
+`managed-host-gate/install-gate.sh` para o passo a passo completo.
+
+**2. Sem acesso de console ao host** (só SSH) — para testar conectividade e transferir a chave do
+bastião sem colar `SUBOT_BASTION_PUBKEY` manualmente, dá pra usar ferramentas SSH padrão a partir
+do orquestrador/bastião:
+
+```bash
+ssh subot@<host>                                                  # testa conectividade (usuário/senha temporários)
+ssh-copy-id -i secrets/ssh/bastion_id_ed25519.pub subot@<host>    # transfere a chave pública do bastião
+ssh -i secrets/ssh/bastion_id_ed25519 subot@<host>                # confirma login por chave, sem senha
+```
+
+Depois de confirmar o login por chave, **suprima a autenticação por senha do usuário `subot`** no
+host gerenciado — a chave já basta, e uma senha ativa reabriria um caminho de acesso fora do
+controle do gate:
+
+```bash
+passwd -l subot   # trava a senha local; login por chave pública continua funcionando normalmente
+```
+
+**3. Registrar o host** em `config/hosts.yaml` apontando `user: subot` — veja "Adicionando um
+host gerenciado" acima.
 
 ## Adicionando ou trocando a IA de um agente
 

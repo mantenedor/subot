@@ -5,15 +5,16 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-mkdir -p data/guac-db data/guac-recordings data/audit data/agent-home data/ollama-models
+mkdir -p data/guac-db data/guac-recordings data/audit data/agent-home data/ollama-models data/security-findings
 mkdir -p secrets/ssh
 mkdir -p containers/guacamole/initdb
 mkdir -p backups
 
 # O container 'agent' roda como UID 1000 (usuário 'subot') — diretórios que ele precisa escrever
-# (home, modelos do Ollama, auditoria) precisam pertencer a esse UID quando criados pela primeira
-# vez como root no host, senão a montagem bind fica de fato somente-leitura pra esse usuário.
-chown -R 1000:1000 data/agent-home data/ollama-models data/audit 2>/dev/null || true
+# (home, modelos do Ollama, auditoria, achados de varredura de vulnerabilidade) precisam pertencer
+# a esse UID quando criados pela primeira vez como root no host, senão a montagem bind fica de
+# fato somente-leitura pra esse usuário.
+chown -R 1000:1000 data/agent-home data/ollama-models data/audit data/security-findings 2>/dev/null || true
 
 if [ ! -f .env ]; then
     echo "==> criando .env a partir de .env.example"

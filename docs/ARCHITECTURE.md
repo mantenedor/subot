@@ -173,8 +173,8 @@ decidir sozinho.
 **Modelo de ameaça, segredo do Telegram e o que a permissão `0600` de `telegram.env` protege (e o
 que não protege)**: ver `managed-host-gate/etc/README.md`.
 
-**Instalação:** ver [README](../README.md#instalando-o-gate-de-privilégio-no-host-gerenciado-usuário-subot)
-para o passo a passo (`managed-host-gate/install.sh`, rodado como root no host gerenciado).
+**Instalação:** ver [Instalando o gate de privilégio](#instalando-o-gate-de-privilégio-no-host-gerenciado-usuário-subot)
+no Guia de operação abaixo.
 
 ## Dimensionamento de VM (CPU-only, escala pequena)
 
@@ -241,6 +241,107 @@ subot/
 └── scripts/                           # setup, pull-models, sync, backup, restore, rotação de chaves,
                                         # healthcheck
 ```
+
+## Guia de operação
+
+### Quickstart manual (sem o instalador)
+
+```bash
+bash scripts/setup.sh          # cria .env, config/hosts.yaml, chave SSH do bastião (com passphrase — anote!), schema do Guacamole
+export SUBOT_SSH_KEY_PASSPHRASE='a-passphrase-que-o-setup.sh-mostrou'
+docker compose up -d
+bash scripts/register-console.sh   # cria a conexão "subot-console" no Guacamole
+bash scripts/pull-models.sh    # baixa os modelos locais default no Ollama (qwen2.5:14b e 7b)
+python3 scripts/sync-claude-agents.py   # projeta agents/*.md -> .claude/agents/*.md
+```
+
+- API REST: não publicada — só de dentro da rede `subot_net` ou via `docker compose exec agent`.
+- Se em algum momento o repositório voltar a ser privado, buscar o `install.sh` e o `git clone`
+  interno dele passam a exigir credencial — ver comentário no topo de `install.sh`. Ajustável via
+  `SUBOT_REPO_URL`, `SUBOT_REPO_REF` e `SUBOT_INSTALL_DIR`.
+
+### Console SSH da IA via Guacamole
+
+`install.sh` (e `scripts/register-console.sh`, que ele chama) já deixam uma conexão
+**"subot-console"** pronta no Guacamole — login no Guacamole (`http://IP:8080/guacamole/`) e
+clicar nela cai direto num shell dentro do container `agent` (de onde dá pra rodar `claude`,
+`subot agent list`, etc.), sem `docker exec` e sem tocar a rede/sshd da VM. Um `dropbear` roda em
+background dentro do `agent`, só na rede docker interna, autenticado por uma chave dedicada
+(`secrets/ssh/guac_console_ed25519`, gerada por `scripts/setup.sh`).
+
+### Adicionando um host gerenciado
+
+Edite `config/hosts.yaml` diretamente (é bind mount, reflete sem rebuild) ou use a skill
+`onboard-host` / a ferramenta MCP `inventory_connector.add_host` (sempre exige confirmação). Esse
+arquivo é gerado por `scripts/setup.sh` a partir de `config/hosts.yaml.example` (o template
+versionado no git) e nunca é commitado — é dado de ambiente, preservado só via
+`scripts/backup.sh`. Veja `config/hosts.yaml.example` para o formato e o significado das tags
+`protected`/`prod`.
+
+### Instalando o gate de privilégio no host gerenciado (usuário `subot`)
+
+Cada host gerenciado tem **um único usuário Linux**, `subot`, sem sudo nenhum. Qualquer comando
+que exigiria privilégio passa pelo gate (`managed-host-gate/`) — um daemon root separado que
+bloqueia esperando aprovação humana assíncrona via Telegram antes de executar. Isso substitui o
+modelo antigo de dois usuários (`subot` sem sudo / `subotsu` com sudo `NOPASSWD`); racional
+completo na seção [Gate de escalação de privilégio](#gate-de-escalação-de-privilégio-managed-host-gate)
+acima.
+
+**1. Instalar o gate** — como root, **no host gerenciado** (nunca no bastião/container do agent):
+
+```bash
+export SUBOT_BASTION_PUBKEY="$(cat secrets/ssh/bastion_id_ed25519.pub)"   # copiado do bastião
+curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/managed-host-gate/install.sh | sudo bash
+```
+
+Isso cria o usuário `subot`, grava a chave pública do bastião em `~subot/.ssh/authorized_keys`,
+instala o daemon do gate e o serviço systemd, e desativa qualquer `subotsu`/sudoers remanescente
+do modelo antigo. É idempotente (pode rodar de novo sem duplicar nada) e narra/pede confirmação
+a cada passo que muda estado do host (`SUBOT_GATE_ASSUME_YES=1` para automação sem terminal). Ver
+`managed-host-gate/install-gate.sh` para o passo a passo completo.
+
+**2. Sem acesso de console ao host** (só SSH) — para testar conectividade e transferir a chave do
+bastião sem colar `SUBOT_BASTION_PUBKEY` manualmente, dá pra usar ferramentas SSH padrão a partir
+do orquestrador/bastião:
+
+```bash
+ssh subot@<host>                                                  # testa conectividade (usuário/senha temporários)
+ssh-copy-id -i secrets/ssh/bastion_id_ed25519.pub subot@<host>    # transfere a chave pública do bastião
+ssh -i secrets/ssh/bastion_id_ed25519 subot@<host>                # confirma login por chave, sem senha
+```
+
+Depois de confirmar o login por chave, **suprima a autenticação por senha do usuário `subot`** no
+host gerenciado — a chave já basta, e uma senha ativa reabriria um caminho de acesso fora do
+controle do gate:
+
+```bash
+passwd -l subot   # trava a senha local; login por chave pública continua funcionando normalmente
+```
+
+**3. Registrar o host** em `config/hosts.yaml` apontando `user: subot` — veja "Adicionando um
+host gerenciado" acima.
+
+### Adicionando ou trocando a IA de um agente
+
+Edite (ou crie) um arquivo em `agents/*.md`. Campos obrigatórios: `name`, `description`,
+`provider` (um id de `config/providers.yaml`), `model`. Opcionais: `tools`, `fallback`,
+`temperature`. Depois de editar, rode `python3 scripts/sync-claude-agents.py` para atualizar a
+projeção em `.claude/agents/`.
+
+Para usar um motor local diferente do Ollama (LM Studio, vLLM), preencha `LMSTUDIO_BASE_URL` ou
+`VLLM_BASE_URL` em `.env` e aponte `provider: lmstudio` / `provider: vllm` no agente — nenhum dos
+dois exige chave de API. Para um provedor remoto (`anthropic`, `openai`, `openrouter`), preencha a
+chave correspondente em `.env`.
+
+### Delegação multi-agente
+
+```bash
+docker compose exec agent subot delegate \
+    "stack-maintainer=faça um health check" \
+    "security-auditor=revise o log de auditoria das últimas 24h"
+```
+
+Cada agente roda no provider/model do seu próprio `agents/*.md`, em paralelo.
 
 ## Fora de escopo (próximos passos)
 

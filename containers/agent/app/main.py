@@ -32,14 +32,14 @@ def list_hosts(group: str | None = None) -> list[dict]:
 class SSHExecRequest(BaseModel):
     host: str
     command: str
-    confirm_token: str | None = None
+    reason: str | None = None
     actor: str = "api"
 
 
 @app.post("/ssh/exec")
 def ssh_exec(req: SSHExecRequest) -> dict:
     try:
-        result = gateway.exec(req.host, req.command, actor=req.actor, confirm_token=req.confirm_token)
+        result = gateway.exec(req.host, req.command, actor=req.actor, reason=req.reason)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     return result.__dict__

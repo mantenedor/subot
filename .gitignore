@@ -19,6 +19,11 @@ data/**
 # inventário real de hosts (o .example é que fica versionado)
 config/hosts.yaml
 
+# identidade real da IA nos hosts geridos (usuário, chave, sudoers promovido) — o .example é que
+# fica versionado; hosts/*.json são os complementos por-host, também dado de ambiente
+config/policy/managed-identity.json
+config/policy/hosts/*.json
+
 # schema do Guacamole, gerado localmente pelo setup.sh a partir da imagem oficial
 containers/guacamole/initdb/*.sql
 

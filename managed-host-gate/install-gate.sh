@@ -5,9 +5,17 @@
 # entrypoint pensado para 'curl | bash'), mas pode ser rodado direto se já houver um checkout
 # local (bin/, etc/, systemd/ ao lado deste arquivo).
 #
-# Migração assumida: o usuário 'subotsu' (sudo NOPASSWD) deixa de existir totalmente. Depois
-# deste script, o único usuário do subot no host é 'subot', SEM nenhuma entrada de sudo — toda
-# escalação de privilégio passa por este gate.
+# Identidade (usuário, chave pública, sudoers pré-aprovado) vem de um manifesto JSON — ver
+# config/policy/managed-identity.json.example no repositório. Exporte SUBOT_IDENTITY_JSON_B64 com
+# o conteúdo (base64) de config/policy/managed-identity.json do bastião antes de rodar este script;
+# opcionalmente SUBOT_HOST_IDENTITY_JSON_B64 com o complemento específico deste host
+# (config/policy/hosts/<hostname>.json), se existir. SUBOT_BASTION_PUBKEY (só a chave, formato
+# antigo) continua aceito como fallback depreciado se SUBOT_IDENTITY_JSON_B64 não vier.
+#
+# Migração assumida: o usuário 'subotsu' (sudo NOPASSWD) deixa de existir totalmente. Depois deste
+# script, o único usuário do subot no host é o do manifesto (default 'subot'), sem sudo nenhum a
+# menos do que esteja explicitamente no manifesto de identidade — todo o resto da escalação de
+# privilégio passa por este gate.
 #
 # Cada ação que muda estado real do host (usuário, sudoers, authorized_keys, pacotes, serviço) é
 # anunciada e confirmada antes de rodar — diferente do install.sh da raiz (que é silencioso por
@@ -69,40 +77,9 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# --- 1. usuário 'subot' ------------------------------------------------------------------------
-if ! id subot >/dev/null 2>&1; then
-    if confirm "criar usuário de sistema 'subot' (useradd --create-home --shell /bin/bash subot)"; then
-        useradd --create-home --shell /bin/bash subot
-    else
-        echo "sem o usuário 'subot' não há como continuar." >&2
-        exit 1
-    fi
-else
-    echo "==> usuário 'subot' já existe, mantendo"
-fi
-
-# --- 2. chave pública do bastião em ~subot/.ssh/authorized_keys -------------------------------
-PUBKEY="${SUBOT_BASTION_PUBKEY:-}"
-if [ -z "$PUBKEY" ] && have_tty; then
-    echo ""
-    echo "==> SUBOT_BASTION_PUBKEY não definida"
-    echo "    cole o conteúdo de secrets/ssh/bastion_id_ed25519.pub (do bastião) e pressione Enter:"
-    read -r PUBKEY < /dev/tty
-fi
-if [ -z "$PUBKEY" ]; then
-    echo "sem a chave pública do bastião não há como autenticar 'subot' — defina SUBOT_BASTION_PUBKEY." >&2
-    exit 1
-fi
-SUBOT_HOME="$(getent passwd subot | cut -d: -f6)"
-if confirm "gravar a chave pública do bastião em ${SUBOT_HOME}/.ssh/authorized_keys"; then
-    install -d -o subot -g subot -m 0700 "${SUBOT_HOME}/.ssh"
-    touch "${SUBOT_HOME}/.ssh/authorized_keys"
-    grep -qxF "$PUBKEY" "${SUBOT_HOME}/.ssh/authorized_keys" || printf '%s\n' "$PUBKEY" >> "${SUBOT_HOME}/.ssh/authorized_keys"
-    chmod 0600 "${SUBOT_HOME}/.ssh/authorized_keys"
-    chown subot:subot "${SUBOT_HOME}/.ssh/authorized_keys"
-fi
-
-# --- 3. dependências ----------------------------------------------------------------------------
+# --- 1. dependências ----------------------------------------------------------------------------
+# Movido para o início: os passos seguintes (usuário, chave) já precisam de 'jq' pra ler o
+# manifesto de identidade.
 MISSING=()
 for bin in curl jq flock base64 od; do
     command -v "$bin" >/dev/null 2>&1 || MISSING+=("$bin")
@@ -118,14 +95,72 @@ else
     echo "==> dependências (curl, jq, flock, base64, od) já presentes"
 fi
 
-# --- 4. grupo + diretórios/permissões -----------------------------------------------------------
-if confirm "criar grupo 'subot-gate' (só 'subot' como membro) e os diretórios do gate em /opt/subot-gate"; then
-    groupadd -f subot-gate
-    usermod -aG subot-gate subot
+# --- 2. manifesto de identidade (usuário, chave, sudoers) ---------------------------------------
+IDENTITY_JSON="{}"
+if [ -n "${SUBOT_IDENTITY_JSON_B64:-}" ]; then
+    IDENTITY_JSON="$(printf '%s' "$SUBOT_IDENTITY_JSON_B64" | base64 -d)" || {
+        echo "SUBOT_IDENTITY_JSON_B64 não decodifica como base64 válido." >&2
+        exit 1
+    }
+fi
+HOST_IDENTITY_JSON="{}"
+if [ -n "${SUBOT_HOST_IDENTITY_JSON_B64:-}" ]; then
+    HOST_IDENTITY_JSON="$(printf '%s' "$SUBOT_HOST_IDENTITY_JSON_B64" | base64 -d)" || {
+        echo "SUBOT_HOST_IDENTITY_JSON_B64 não decodifica como base64 válido." >&2
+        exit 1
+    }
+fi
+IDENTITY_USERNAME="$(jq -r '.username // "subot"' <<<"$IDENTITY_JSON")"
+IDENTITY_PUBKEY="$(jq -r '.ssh_authorized_key // empty' <<<"$IDENTITY_JSON")"
+echo "==> identidade: usuário '$IDENTITY_USERNAME'$([ "$IDENTITY_JSON" = "{}" ] && echo " (manifesto não fornecido — usando default)")"
 
-    # /opt/subot-gate precisa de 'x' de grupo para 'subot' conseguir ATRAVESSAR até var/requests —
-    # 'x' sem 'r' permite entrar em subdiretório por nome mas não listar o conteúdo daqui (não vê
-    # 'bin'/'etc' via 'ls'), e bin/ e etc/ continuam 0700 root:root, inacessíveis mesmo por nome.
+# --- 3. usuário -----------------------------------------------------------------------------
+if ! id "$IDENTITY_USERNAME" >/dev/null 2>&1; then
+    if confirm "criar usuário de sistema '$IDENTITY_USERNAME' (useradd --create-home --shell /bin/bash $IDENTITY_USERNAME)"; then
+        useradd --create-home --shell /bin/bash "$IDENTITY_USERNAME"
+    else
+        echo "sem o usuário '$IDENTITY_USERNAME' não há como continuar." >&2
+        exit 1
+    fi
+else
+    echo "==> usuário '$IDENTITY_USERNAME' já existe, mantendo"
+fi
+
+# --- 4. chave pública do bastião em ~<usuário>/.ssh/authorized_keys -----------------------------
+PUBKEY="$IDENTITY_PUBKEY"
+if [ -z "$PUBKEY" ] && [ -n "${SUBOT_BASTION_PUBKEY:-}" ]; then
+    echo "==> usando SUBOT_BASTION_PUBKEY (formato antigo) — prefira SUBOT_IDENTITY_JSON_B64"
+    echo "    (ver config/policy/managed-identity.json.example no repositório)."
+    PUBKEY="$SUBOT_BASTION_PUBKEY"
+fi
+if [ -z "$PUBKEY" ] && have_tty; then
+    echo ""
+    echo "==> nenhuma chave pública fornecida (SUBOT_IDENTITY_JSON_B64/SUBOT_BASTION_PUBKEY)"
+    echo "    cole o conteúdo de secrets/ssh/bastion_id_ed25519.pub (do bastião) e pressione Enter:"
+    read -r PUBKEY < /dev/tty
+fi
+if [ -z "$PUBKEY" ]; then
+    echo "sem a chave pública do bastião não há como autenticar '$IDENTITY_USERNAME' — defina SUBOT_IDENTITY_JSON_B64 ou SUBOT_BASTION_PUBKEY." >&2
+    exit 1
+fi
+USER_HOME="$(getent passwd "$IDENTITY_USERNAME" | cut -d: -f6)"
+if confirm "gravar a chave pública do bastião em ${USER_HOME}/.ssh/authorized_keys"; then
+    install -d -o "$IDENTITY_USERNAME" -g "$IDENTITY_USERNAME" -m 0700 "${USER_HOME}/.ssh"
+    touch "${USER_HOME}/.ssh/authorized_keys"
+    grep -qxF "$PUBKEY" "${USER_HOME}/.ssh/authorized_keys" || printf '%s\n' "$PUBKEY" >> "${USER_HOME}/.ssh/authorized_keys"
+    chmod 0600 "${USER_HOME}/.ssh/authorized_keys"
+    chown "$IDENTITY_USERNAME:$IDENTITY_USERNAME" "${USER_HOME}/.ssh/authorized_keys"
+fi
+
+# --- 5. grupo + diretórios/permissões -----------------------------------------------------------
+if confirm "criar grupo 'subot-gate' (só '$IDENTITY_USERNAME' como membro) e os diretórios do gate em /opt/subot-gate"; then
+    groupadd -f subot-gate
+    usermod -aG subot-gate "$IDENTITY_USERNAME"
+
+    # /opt/subot-gate precisa de 'x' de grupo para '$IDENTITY_USERNAME' conseguir ATRAVESSAR até
+    # var/requests — 'x' sem 'r' permite entrar em subdiretório por nome mas não listar o conteúdo
+    # daqui (não vê 'bin'/'etc' via 'ls'), e bin/ e etc/ continuam 0700 root:root, inacessíveis
+    # mesmo por nome.
     install -d -o root -g subot-gate -m 0710 /opt/subot-gate
     install -d -o root -g root       -m 0700 /opt/subot-gate/bin
     install -d -o root -g root       -m 0700 /opt/subot-gate/etc
@@ -143,16 +178,39 @@ else
     exit 1
 fi
 
-# --- 5. scripts -----------------------------------------------------------------------------------
-if confirm "instalar os scripts do gate (/opt/subot-gate/bin/subot-gate-daemon.sh, /usr/local/bin/subot-gate-request)"; then
+# --- 6. scripts -----------------------------------------------------------------------------------
+if confirm "instalar os scripts do gate (daemon, cliente, aplicador de sudoers)"; then
     install -m 0700 -o root -g root bin/subot-gate-daemon.sh /opt/subot-gate/bin/subot-gate-daemon.sh
+    install -m 0700 -o root -g root bin/apply-sudoers-policy.sh /opt/subot-gate/bin/apply-sudoers-policy.sh
     install -m 0755 -o root -g root bin/subot-gate-request.sh /usr/local/bin/subot-gate-request
 else
     echo "sem os scripts instalados não há como continuar." >&2
     exit 1
 fi
 
-# --- 6. credenciais do Telegram -------------------------------------------------------------------
+# --- 7. sudoers pré-aprovado (padrão + específico deste host, se veio) --------------------------
+MERGED_SUDOERS="$(jq -n --argjson a "$(jq '.sudoers // []' <<<"$IDENTITY_JSON")" \
+                        --argjson b "$(jq '.sudoers // []' <<<"$HOST_IDENTITY_JSON")" \
+                        '$a + $b')"
+SUDOERS_COUNT="$(jq 'length' <<<"$MERGED_SUDOERS")"
+if [ "$SUDOERS_COUNT" -gt 0 ]; then
+    APPLY_PAYLOAD="$(jq -n --arg u "$IDENTITY_USERNAME" --argjson s "$MERGED_SUDOERS" '{username: $u, sudoers: $s}')"
+    APPLY_PAYLOAD_B64="$(printf '%s' "$APPLY_PAYLOAD" | base64 -w0)"
+    echo ""
+    echo "==> pré-visualização do sudoers a aplicar para '$IDENTITY_USERNAME' ($SUDOERS_COUNT padrão(ões) no manifesto):"
+    /opt/subot-gate/bin/apply-sudoers-policy.sh --dry-run "$APPLY_PAYLOAD_B64" || true
+    if confirm "aplicar de fato o sudoers acima (grava /etc/sudoers.d/subot-agent, validado com visudo -c)"; then
+        /opt/subot-gate/bin/apply-sudoers-policy.sh "$APPLY_PAYLOAD_B64"
+    else
+        echo "    sudoers não aplicado agora — '$IDENTITY_USERNAME' segue sem essas entradas (100% via Gate"
+        echo "    até aplicar manualmente ou rodar 'subot identity sync' depois)."
+    fi
+else
+    echo "==> nenhum padrão de sudoers no manifesto de identidade — '$IDENTITY_USERNAME' segue sem"
+    echo "    nenhuma entrada de sudo (toda escalação passa 100% pelo Gate)."
+fi
+
+# --- 8. credenciais do Telegram -------------------------------------------------------------------
 # Passo interativo por natureza (não há como "digitar" token/chat_id sem terminal) — diferente dos
 # outros blocos, SUBOT_GATE_ASSUME_YES sem tty não tenta ler nada: vai direto pro template, sem
 # travar num 'read' que nunca teria como ser respondido.
@@ -186,7 +244,7 @@ fi
 chmod 0600 /opt/subot-gate/etc/telegram.env
 chown root:root /opt/subot-gate/etc/telegram.env
 
-# --- 7. systemd -----------------------------------------------------------------------------------
+# --- 9. systemd -----------------------------------------------------------------------------------
 if confirm "instalar e habilitar o serviço systemd 'subot-gate'"; then
     install -m 0644 -o root -g root systemd/subot-gate.service /etc/systemd/system/subot-gate.service
     systemctl daemon-reload
@@ -195,8 +253,8 @@ else
     echo "sem o serviço habilitado o gate não roda — instale manualmente depois." >&2
 fi
 
-# --- 8. migração: remover subotsu/sudoers (irreversível) -------------------------------------------
-if confirm_destructive "revogar sudo de 'subot' e desativar 'subotsu' (modelo antigo) — IRREVERSÍVEL sem reconfigurar manualmente"; then
+# --- 10. migração: remover subotsu/sudoers legado (irreversível) -----------------------------------
+if confirm_destructive "revogar sudo de '$IDENTITY_USERNAME' (fora do manifesto) e desativar 'subotsu' (modelo antigo) — IRREVERSÍVEL sem reconfigurar manualmente"; then
     rm -f /etc/sudoers.d/subotsu
     if id subotsu >/dev/null 2>&1; then
         usermod -L -s /usr/sbin/nologin subotsu
@@ -212,4 +270,4 @@ fi
 echo ""
 echo "==> instalação concluída. Se telegram.env não foi preenchido acima, edite"
 echo "    /opt/subot-gate/etc/telegram.env e rode: systemctl start subot-gate"
-echo "    Depois valide com: sudo -l -U subot   (deve vir vazio)"
+echo "    Depois valide com: sudo -l -U ${IDENTITY_USERNAME}   (mostra só o que estiver no manifesto)"

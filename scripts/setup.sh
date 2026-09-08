@@ -61,6 +61,25 @@ else
     echo "==> par de chaves SSH do bastião já existe, mantendo como está"
 fi
 
+if [ ! -f config/policy/managed-identity.json ]; then
+    echo "==> criando config/policy/managed-identity.json a partir do template (injetando ${KEY}.pub)"
+    python3 -c '
+import json, sys
+with open("config/policy/managed-identity.json.example", encoding="utf-8") as f:
+    data = json.load(f)
+with open(sys.argv[1], encoding="utf-8") as f:
+    data["ssh_authorized_key"] = f.read().strip()
+with open("config/policy/managed-identity.json", "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+    f.write("\n")
+' "${KEY}.pub"
+    echo "    lista 'sudoers' padrão copiada do template — edite config/policy/managed-identity.json"
+    echo "    depois para promover/remover comandos (efetivo só após 'subot identity sync --host <nome>')."
+else
+    echo "==> config/policy/managed-identity.json já existe, mantendo como está"
+fi
+mkdir -p config/policy/hosts
+
 touch secrets/ssh/known_hosts
 
 CONSOLE_KEY="secrets/ssh/guac_console_ed25519"

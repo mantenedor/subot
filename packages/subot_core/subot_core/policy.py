@@ -61,6 +61,23 @@ class PolicyEngine:
                 return pattern
         return None
 
+    def list_sensitive_patterns(self) -> list[str]:
+        """Padrões 'sensitive_patterns' de allowlist.yaml — candidatos a promoção para sudoers
+        (ver config/policy/managed-identity.json.example e managed-host-gate/apply-sudoers-policy.sh).
+        Só glob puro faz sentido promover: filtra fora qualquer padrão 're:'-prefixado, que não tem
+        tradução em sudoers."""
+        return [p for p in self._sensitive_patterns if not p.startswith("re:")]
+
+    def list_destructive_patterns(self) -> list[str]:
+        """Padrões 'destructive_patterns' (glob puro) — usado para checagem de defesa em
+        profundidade em managed-host-gate/bin/apply-sudoers-policy.sh: nunca deve ser possível
+        promover algo destructive para sudoers, mesmo que por engano esteja num manifesto."""
+        return [p for p in self._destructive_patterns if not p.startswith("re:")]
+
+    def list_blocked_patterns(self) -> list[str]:
+        """Idem, para 'blocked_patterns' (glob puro)."""
+        return [p for p in self._blocked_patterns if not p.startswith("re:")]
+
     def classify(self, command: str, *, host_is_protected: bool = False) -> Decision:
         command = command.strip()
 

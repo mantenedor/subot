@@ -19,6 +19,7 @@ read -r -p "isso apaga /opt/subot-gate inteiro, incluindo a auditoria local (gat
 if [ "${ans:-N}" = "y" ] || [ "${ans:-N}" = "Y" ]; then
     rm -rf /opt/subot-gate
     rm -f /usr/local/bin/subot-gate-request
+    rm -f /etc/sudoers.d/subot-agent
     gpasswd -d subot subot-gate 2>/dev/null || true
     groupdel subot-gate 2>/dev/null || true
     echo "==> removido."

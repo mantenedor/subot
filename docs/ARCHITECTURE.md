@@ -14,6 +14,7 @@ fica fora do git (veja `.gitignore`) e é preservado só via `scripts/backup.sh`
 | `docker-compose.yml`, `containers/`, `packages/`, `mcp-servers/`, `agents/*.md`, `.claude/`, `scripts/`, `install.sh` | `.env` (senhas) |
 | `config/hosts.yaml.example` (template) | `config/hosts.yaml` (inventário real de hosts) |
 | `config/providers.yaml`, `config/policy/*.yaml` (defaults genéricos) | `secrets/` (chaves SSH) |
+| `config/policy/managed-identity.json.example` (template) | `config/policy/managed-identity.json` + `config/policy/hosts/*.json` (identidade/sudoers real da IA em cada host) |
 | | `data/` (bancos, gravações de sessão, log de auditoria, modelos do Ollama) |
 
 Isso torna o disaster-recovery em duas partes independentes e óbvias: `git clone` (ou
@@ -100,9 +101,13 @@ Toda ação sobre um host gerenciado passa por `packages/subot_core`:
 1. **`policy.py`** classifica cada comando como `safe` / `sensitive` / `destructive` / `blocked`
    a partir de `config/policy/allowlist.yaml` e `destructive_patterns.yaml`. Comando desconhecido
    nunca é `safe` por padrão (fail-closed) — vira `sensitive`.
-2. **`confirm.py`** implementa confirmação em duas etapas ("break-glass"): uma ação não-safe
-   retorna um `confirm_token` de uso único em vez de executar; só roda de fato numa segunda
-   chamada explícita com esse token — vale para MCP, CLI e REST igualmente.
+2. **`confirm.py`** implementa confirmação em duas etapas ("break-glass") — hoje só para
+   `ssh_upload`/`ssh_download`: uma transferência retorna um `confirm_token` de uso único em vez de
+   executar; só roda de fato numa segunda chamada explícita com esse token. Para `ssh_exec`
+   (execução de comando), esse token autosservível foi **substituído** por escalação real: um
+   comando `sensitive`/`destructive` exige um `reason` humano-legível e tenta o atalho de sudoers
+   pré-promovido no host; se não estiver promovido, cai no `managed-host-gate` (aprovação humana
+   assíncrona via Telegram) — ver "Gate de escalação de privilégio" abaixo.
 3. **`audit.py`** grava todo evento (tentado ou executado) em `./data/audit/*.jsonl`,
    append-only.
 4. **`ssh.py`** usa `paramiko.RejectPolicy` — nunca aceita uma host key desconhecida
@@ -151,10 +156,35 @@ VM como não confiável por padrão:
 ### Gate de escalação de privilégio (`managed-host-gate/`)
 
 Substitui o modelo antigo de dois usuários (`subot` sem sudo / `subotsu` com sudo `NOPASSWD`).
-Cada host gerenciado tem só o usuário `subot`, **sem nenhuma entrada de sudo** — todo comando que
-exigiria privilégio passa por um daemon root separado (`bin/subot-gate-daemon.sh`), instalado e
+Cada host gerenciado tem só o usuário do manifesto de identidade (default `subot`), sem sudo nenhum
+a menos do que esteja explicitamente promovido — todo comando `sensitive`/`destructive` que não
+esteja promovido passa por um daemon root separado (`bin/subot-gate-daemon.sh`), instalado e
 rodando como serviço systemd no próprio host gerenciado, que bloqueia esperando aprovação humana
 assíncrona via Telegram antes de executar qualquer coisa.
+
+**Atalho de sudoers pré-promovido:** nenhum comando roda sem que um humano tenha autorizado em
+algum momento — mas essa autorização pode ter acontecido **antes**, na promoção, em vez de em
+tempo real a cada execução. `config/policy/managed-identity.json` (padrão, aplicado a todo host) +
+`config/policy/hosts/<hostname>.json` (complemento por-host) descrevem o usuário, a chave SSH
+autorizada, e uma lista de padrões `sensitive_patterns` (de `allowlist.yaml`) já aprovados para
+rodar via `sudo` direto, sem round-trip de Telegram. Só `sensitive` pode ser promovido —
+`destructive`/`blocked` nunca ganham esse atalho, nem em código (`SSHGateway._exec_privileged`
+só tenta `sudo -n -l` para `Risk.SENSITIVE`) nem na aplicação da política
+(`managed-host-gate/bin/apply-sudoers-policy.sh` recusa qualquer padrão que corresponda a
+`destructive_patterns`/`blocked_patterns`, e qualquer padrão `re:`-prefixado — sudoers não tem
+semântica de regex). **Aplicar essa política num host já provisionado é, ela mesma, uma escalação
+de privilégio** — reusa o mesmo Gate acima (sem protocolo novo): `subot identity sync --host <nome>`
+sempre exige aprovação humana em tempo real, mostrando o conteúdo completo a promover. Detalhes de
+uso em "Promovendo comandos para sudoers", no Guia de operação abaixo.
+
+**Limitação aceita conscientemente**: a checagem cruzada contra `destructive_patterns`/
+`blocked_patterns` dentro de `apply-sudoers-policy.sh` só recebe essas listas quando quem chama é
+`subot identity sync` (que tem acesso ao `PolicyEngine` do bastião). Na instalação inicial
+(`install-gate.sh`), o payload só leva `username`+`sudoers` — a única defesa nesse momento é o
+`--dry-run` mostrado antes do `confirm()` interativo (um humano de verdade lendo o resultado antes
+de digitar "sim"). Editar `config/policy/managed-identity.json` para incluir por engano um padrão
+destrutivo na lista `sudoers` não é pego automaticamente até a instalação; revise o `--dry-run` com
+atenção nesse passo.
 
 **Por que não bastava o `confirm.py` existente:** o fluxo de confirmação em duas etapas de
 `packages/subot_core/subot_core/confirm.py` (`ConfirmationStore.create`/`.consume`, linhas 57 e
@@ -173,7 +203,7 @@ decidir sozinho.
 **Modelo de ameaça, segredo do Telegram e o que a permissão `0600` de `telegram.env` protege (e o
 que não protege)**: ver `managed-host-gate/etc/README.md`.
 
-**Instalação:** ver [Instalando o gate de privilégio](#instalando-o-gate-de-privilégio-no-host-gerenciado-usuário-subot)
+**Instalação:** ver [Instalando o gate de privilégio](#instalando-o-gate-de-privilégio-no-host-gerenciado)
 no Guia de operação abaixo.
 
 ## Dimensionamento de VM (CPU-only, escala pequena)
@@ -278,31 +308,37 @@ versionado no git) e nunca é commitado — é dado de ambiente, preservado só 
 `scripts/backup.sh`. Veja `config/hosts.yaml.example` para o formato e o significado das tags
 `protected`/`prod`.
 
-### Instalando o gate de privilégio no host gerenciado (usuário `subot`)
+### Instalando o gate de privilégio no host gerenciado
 
-Cada host gerenciado tem **um único usuário Linux**, `subot`, sem sudo nenhum. Qualquer comando
-que exigiria privilégio passa pelo gate (`managed-host-gate/`) — um daemon root separado que
-bloqueia esperando aprovação humana assíncrona via Telegram antes de executar. Isso substitui o
-modelo antigo de dois usuários (`subot` sem sudo / `subotsu` com sudo `NOPASSWD`); racional
-completo na seção [Gate de escalação de privilégio](#gate-de-escalação-de-privilégio-managed-host-gate)
-acima.
+Cada host gerenciado tem **um único usuário Linux** (definido em
+`config/policy/managed-identity.json`, default `subot`), sem sudo nenhum a menos do que esteja
+explicitamente no manifesto de identidade. Qualquer comando `sensitive`/`destructive` não-promovido
+passa pelo gate (`managed-host-gate/`) — um daemon root separado que bloqueia esperando aprovação
+humana assíncrona via Telegram antes de executar. Isso substitui o modelo antigo de dois usuários
+(`subot` sem sudo / `subotsu` com sudo `NOPASSWD`); racional completo na seção [Gate de escalação de
+privilégio](#gate-de-escalação-de-privilégio-managed-host-gate) acima.
 
 **1. Instalar o gate** — como root, **no host gerenciado** (nunca no bastião/container do agent):
 
 ```bash
-export SUBOT_BASTION_PUBKEY="$(cat secrets/ssh/bastion_id_ed25519.pub)"   # copiado do bastião
+export SUBOT_IDENTITY_JSON_B64="$(base64 -w0 config/policy/managed-identity.json)"   # do bastião
+# opcional, se já existir um complemento específico para este host:
+export SUBOT_HOST_IDENTITY_JSON_B64="$(base64 -w0 config/policy/hosts/<hostname>.json)"
 curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/managed-host-gate/install.sh | sudo bash
 ```
 
-Isso cria o usuário `subot`, grava a chave pública do bastião em `~subot/.ssh/authorized_keys`,
-instala o daemon do gate e o serviço systemd, e desativa qualquer `subotsu`/sudoers remanescente
-do modelo antigo. É idempotente (pode rodar de novo sem duplicar nada) e narra/pede confirmação
-a cada passo que muda estado do host (`SUBOT_GATE_ASSUME_YES=1` para automação sem terminal). Ver
-`managed-host-gate/install-gate.sh` para o passo a passo completo.
+Isso cria o usuário do manifesto, grava a chave pública autorizada em `~<usuário>/.ssh/authorized_keys`,
+instala o daemon do gate e o serviço systemd, aplica o `sudoers` já promovido no manifesto (mostra
+uma pré-visualização e pede confirmação antes de gravar), e desativa qualquer `subotsu`/sudoers
+remanescente do modelo antigo. É idempotente (pode rodar de novo sem duplicar nada) e narra/pede
+confirmação a cada passo que muda estado do host (`SUBOT_GATE_ASSUME_YES=1` para automação sem
+terminal). `SUBOT_BASTION_PUBKEY` (só a chave, formato antigo) continua aceito como fallback
+depreciado se `SUBOT_IDENTITY_JSON_B64` não vier. Ver `managed-host-gate/install-gate.sh` para o
+passo a passo completo.
 
-**2. Sem acesso de console ao host** (só SSH) — para testar conectividade e transferir a chave do
-bastião sem colar `SUBOT_BASTION_PUBKEY` manualmente, dá pra usar ferramentas SSH padrão a partir
-do orquestrador/bastião:
+**2. Sem acesso de console ao host** (só SSH) — para testar conectividade e transferir a chave
+autorizada sem passar `SUBOT_IDENTITY_JSON_B64` manualmente, dá pra usar ferramentas SSH padrão a
+partir do orquestrador/bastião:
 
 ```bash
 ssh subot@<host>                                                  # testa conectividade (usuário/senha temporários)
@@ -318,8 +354,37 @@ controle do gate:
 passwd -l subot   # trava a senha local; login por chave pública continua funcionando normalmente
 ```
 
-**3. Registrar o host** em `config/hosts.yaml` apontando `user: subot` — veja "Adicionando um
-host gerenciado" acima.
+**3. Registrar o host** em `config/hosts.yaml` apontando `user:` para o mesmo usuário do manifesto
+de identidade (default `subot`) — veja "Adicionando um host gerenciado" acima.
+
+### Promovendo comandos para sudoers
+
+Depois que o gate está instalado num host, dois arquivos controlam o que roda via `sudo` direto
+(sem esperar aprovação humana em tempo real) nesse host:
+
+- `config/policy/managed-identity.json` — `sudoers` aqui é a lista **padrão, aplicada a todo host**.
+- `config/policy/hosts/<hostname>.json` (opcional) — `sudoers` aqui **complementa** (nunca
+  substitui) a lista padrão, só para esse host. Formato: `{"sudoers": [{"pattern": "..."}]}`.
+
+Cada `pattern` precisa já existir em `sensitive_patterns` de `config/policy/allowlist.yaml` (não
+dá pra promover algo que a política ainda não reconhece como `sensitive`) e não pode ter prefixo
+`re:` (sudoers não tem semântica de regex — só glob puro, ex. `"docker compose restart*"`).
+
+Depois de editar um desses arquivos, aplique num host específico (sempre exige aprovação humana em
+tempo real, mesmo que o host já esteja em produção há tempos):
+
+```bash
+docker compose exec agent subot identity sync --host <nome>
+```
+
+Isso mescla as duas listas, valida cada `pattern` contra `sensitive_patterns`, e dispara
+`managed-host-gate/bin/apply-sudoers-policy.sh` no host via o Gate — a notificação no Telegram
+mostra o conteúdo completo (já com os paths resolvidos) antes de alguém aprovar. Para ver o que já
+está de fato promovido num host (leitura, sem privilégio):
+
+```bash
+docker compose exec agent subot identity show <nome>
+```
 
 ### Adicionando ou trocando a IA de um agente
 
@@ -366,3 +431,5 @@ Cada agente roda no provider/model do seu próprio `agents/*.md`, em paralelo.
 - Validação automatizada do gate de escalação de privilégio (`managed-host-gate/`) contra um host
   descartável — ainda não há um script/CI que suba um host de teste e rode
   `install-gate.sh`/`uninstall-gate.sh` de ponta a ponta; hoje é validação manual.
+  `managed-host-gate/tests/test-apply-sudoers-policy.sh` cobre só `apply-sudoers-policy.sh`
+  isoladamente (precisa de `jq`+`visudo`+root; roda manualmente, não em CI ainda).

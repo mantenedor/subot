@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Servidor MCP para execução SSH e transferência de arquivos contra o inventário do subot,
-sempre mediado pelo motor de política e confirmação do subot_core. Comandos sensíveis/destrutivos
-retornam um confirm_token em vez de rodar; chame a mesma tool de novo com esse token para
-executar de fato."""
+sempre mediado pelo motor de política do subot_core. Em ssh_exec, comandos sensitive/destructive
+exigem um 'reason' humano-legível — a partir daí a escalação é real (sudoers pré-promovido no
+host, com fallback em aprovação humana assíncrona via Telegram), não mais um token autosservível.
+ssh_upload/ssh_download continuam exigindo confirm_token (risco diferente, sem análogo de sudoers)."""
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
@@ -17,6 +18,12 @@ def _format(result) -> str:
         return (f"CONFIRMAÇÃO NECESSÁRIA ({result.reason}). Rode a mesma tool novamente com os "
                 f"MESMOS argumentos mais confirm_token='{result.confirm_token}' para executar — "
                 f"só faça isso depois de explicar o risco ao operador humano e obter aceite explícito.")
+    if result.status == "reason_required":
+        return (f"MOTIVO NECESSÁRIO ({result.reason}). Rode a mesma tool novamente com os MESMOS "
+                f"argumentos mais reason='<explique por que esse comando precisa rodar agora>'. Se "
+                f"o comando já estiver pré-aprovado no sudoers deste host, executa na hora; senão "
+                f"pode levar até ~5min esperando aprovação humana (Gate/Telegram) no host — isso é "
+                f"esperado, não é erro.")
     if result.status == "blocked":
         return f"BLOQUEADO: {result.reason}"
     if result.status == "error":
@@ -34,11 +41,13 @@ def list_hosts(group: str | None = None) -> str:
 
 
 @mcp.tool()
-def ssh_exec(host: str, command: str, confirm_token: str | None = None) -> str:
+def ssh_exec(host: str, command: str, reason: str | None = None) -> str:
     """Roda um comando de shell em um host gerenciado. Comandos safe rodam na hora. Comandos
-    sensitive/destructive retornam status de confirmação necessária com um confirm_token — chame
-    de novo com o MESMO host/command mais esse token para executar."""
-    result = gateway.exec(host, command, actor="mcp:ssh_connector", confirm_token=confirm_token)
+    sensitive/destructive exigem um 'reason' humano-legível — sem ele, retorna status pedindo
+    motivo; chame de novo com o MESMO host/command mais reason=... Com o motivo, tenta o atalho de
+    sudoers pré-promovido nesse host (instantâneo); se não estiver promovido, cai em aprovação
+    humana assíncrona via Telegram (pode levar minutos)."""
+    result = gateway.exec(host, command, actor="mcp:ssh_connector", reason=reason)
     if result.status == "executed":
         return f"exit_code={result.exit_code}\n--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
     return _format(result)

@@ -13,6 +13,7 @@ from pathlib import Path
 
 SSH_DIR = Path(os.environ.get("SUBOT_SSH_DIR", "/opt/subot/secrets/ssh"))
 STRICT = os.environ.get("SUBOT_STRICT_KEY_PERMS", "false").lower() == "true"
+ENV_FILE = Path(os.environ.get("SUBOT_ENV_FILE", "/opt/subot/.env"))
 
 
 class InsecureKeyPermissions(RuntimeError):
@@ -43,15 +44,35 @@ def default_identity(host_identity_file: str | None = None) -> Path:
 
 def known_hosts_path() -> Path:
     path = SSH_DIR / "known_hosts"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.touch(exist_ok=True)
+    # 'secrets/ssh' é montado somente-leitura por design (ver ARCHITECTURE.md, Controles de
+    # segurança item 6) — só tenta criar o diretório/arquivo quando ele ainda não existe (dev
+    # local sem o mount ainda montado); quando já existe (caso comum, inclusive em produção),
+    # mkdir/touch tentariam escrever num mount ro e falhariam com PermissionError mesmo com
+    # exist_ok=True (que só engole FileExistsError, não PermissionError).
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch(exist_ok=True)
     return path
 
 
+def _read_passphrase_from_env_file() -> str | None:
+    try:
+        lines = ENV_FILE.read_text().splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        line = line.strip()
+        if line.startswith("SUBOT_SSH_KEY_PASSPHRASE="):
+            return line.split("=", 1)[1].strip() or None
+    return None
+
+
 def key_passphrase() -> str | None:
-    """Passphrase da chave privada do bastião — NUNCA fica salva em arquivo (nem em .env por
-    padrão). É fornecida ao container só como variável de ambiente no momento do
-    'docker compose up', então só existe na memória do processo em execução. Se a chave foi
-    gerada sem passphrase (rodando fora do fluxo padrão de scripts/setup.sh), retorna None e o
-    paramiko simplesmente carrega a chave sem tentar descriptografá-la."""
-    return os.environ.get("SUBOT_SSH_KEY_PASSPHRASE") or None
+    """Passphrase da chave privada do bastião. Lida direto de ENV_FILE (montado só-leitura, ver
+    docker-compose.yml) a cada chamada, não de uma cópia fixada na criação do processo — assim
+    trocar o valor no .env (ex.: rotação de chave) tem efeito imediato, sem recriar o container.
+    Cai para a variável de ambiente só se o arquivo não existir (ex.: exportada manualmente antes
+    do 'docker compose up', sem preencher o .env). Se a chave foi gerada sem passphrase (rodando
+    fora do fluxo padrão de scripts/setup.sh), retorna None e o paramiko simplesmente carrega a
+    chave sem tentar descriptografá-la."""
+    return _read_passphrase_from_env_file() or os.environ.get("SUBOT_SSH_KEY_PASSPHRASE") or None

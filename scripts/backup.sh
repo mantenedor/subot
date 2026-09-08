@@ -19,15 +19,27 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="backups/subot-env-backup-${STAMP}.tar.gz"
 
 ARGS=(data)
-[ -f .env ] && ARGS+=(.env)
-[ -f config/hosts.yaml ] && ARGS+=(config/hosts.yaml)
+DISPLAY=(data)
+[ -f config/hosts.yaml ] && ARGS+=(config/hosts.yaml) && DISPLAY+=(config/hosts.yaml)
 if ! $EXCLUDE_SECRETS && [ -d secrets ]; then
     ARGS+=(secrets)
+    DISPLAY+=(secrets)
+fi
+
+# .env pode conter SUBOT_SSH_KEY_PASSPHRASE preenchida (opção prática, ver comentário no próprio
+# .env) — nunca vai pro mesmo backup que já carrega secrets/ssh/, senão o arquivo sozinho destrava
+# a chave sem precisar de mais nada. Empacota uma cópia redigida em vez do arquivo real.
+if [ -f .env ]; then
+    TMPDIR="$(mktemp -d)"
+    trap 'rm -rf "$TMPDIR"' EXIT
+    sed 's/^SUBOT_SSH_KEY_PASSPHRASE=.*/SUBOT_SSH_KEY_PASSPHRASE=__REDACTED_NAO_INCLUIDO_NO_BACKUP__/' .env > "$TMPDIR/.env"
+    ARGS+=(-C "$TMPDIR" .env)
+    DISPLAY+=(".env (com passphrase redigida)")
 fi
 
 tar -czf "$OUT" "${ARGS[@]}"
 echo "==> gravado ${OUT}"
-echo "    contém: ${ARGS[*]}"
+echo "    contém: ${DISPLAY[*]}"
 if $EXCLUDE_SECRETS; then
     echo "    (secrets/ excluído — este arquivo sozinho NÃO é suficiente para restaurar acesso SSH/TLS)"
 fi
@@ -35,11 +47,13 @@ fi
 echo ""
 echo "    #################################################################"
 echo "    # ATENÇÃO — a passphrase da chave SSH do bastião NÃO está neste"
-echo "    # backup (de propósito — nunca fica salva em arquivo nenhum)."
-echo "    # Sem ela guardada em algum lugar (gerenciador de senha, cofre da"
-echo "    # empresa), restaurar este backup numa VM nova te dá a chave"
-echo "    # cifrada de volta, mas SEM COMO ABRI-LA — perda permanente de"
-echo "    # acesso SSH, só resolve regenerando e redistribuindo uma chave"
+echo "    # backup, mesmo que esteja preenchida no seu .env local (redigida"
+echo "    # de propósito: nunca fica no mesmo arquivo que a chave cifrada,"
+echo "    # senão o backup sozinho já destrava o acesso SSH pra quem o pegar)."
+echo "    # Sem ela guardada em algum lugar à parte (gerenciador de senha,"
+echo "    # cofre da empresa), restaurar este backup numa VM nova te dá a"
+echo "    # chave cifrada de volta, mas SEM COMO ABRI-LA — perda permanente"
+echo "    # de acesso SSH, só resolve regenerando e redistribuindo uma chave"
 echo "    # nova pra todos os hosts gerenciados."
 echo "    #"
 echo "    # Se ainda não guardou a passphrase que apareceu quando a chave"

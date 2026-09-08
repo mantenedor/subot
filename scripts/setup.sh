@@ -44,6 +44,13 @@ if [ ! -f "$KEY" ]; then
     ssh-keygen -t ed25519 -f "$KEY" -N "$GENERATED_SSH_PASSPHRASE" -C "subot-bastion"
     chmod 600 "$KEY"
     chmod 644 "${KEY}.pub"
+    # se secrets/ssh pertence a root (setup rodando no host) e o binário existir, concede leitura
+    # pro UID 1000 (container 'agent') via ACL, sem abrir grupo/outros — chmod sozinho não resolve
+    # sem abrir grupo/outros. Se o diretório já pertence ao próprio UID 1000, redundante; pula sem
+    # quebrar o script.
+    if command -v setfacl >/dev/null 2>&1; then
+        setfacl -m u:1000:r "$KEY" || true
+    fi
     echo ""
     echo "    #################################################################"
     echo "    # GUARDE ESTA PASSPHRASE AGORA — ela NÃO é salva em nenhum arquivo."

@@ -17,6 +17,12 @@ NEW_PASSPHRASE="$(openssl rand -base64 24 | tr -d '=+/')"
 ssh-keygen -t ed25519 -f "$NEW_KEY" -N "$NEW_PASSPHRASE" -C "subot-bastion-${STAMP}"
 chmod 600 "$NEW_KEY"
 chmod 644 "${NEW_KEY}.pub"
+# se rodar como root no host (dono fica root:root) e o binário existir, concede leitura pro UID
+# 1000 (container 'agent') via ACL, sem abrir grupo/outros. Se secrets/ssh já pertence ao próprio
+# UID 1000 (rotação rodando de dentro do container) isso é redundante — pula sem quebrar o script.
+if command -v setfacl >/dev/null 2>&1; then
+    setfacl -m u:1000:r "$NEW_KEY" || true
+fi
 
 echo ""
 echo "    #################################################################"

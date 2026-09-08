@@ -7,9 +7,11 @@ x-subot-env: &subot-env
   SUBOT_ALLOWLIST_FILE: /opt/subot/config/policy/allowlist.yaml
   SUBOT_DESTRUCTIVE_FILE: /opt/subot/config/policy/destructive_patterns.yaml
   SUBOT_SSH_DIR: /opt/subot/secrets/ssh
-  # Passphrase da chave privada do bastião — de propósito SEM default e SEM vir de .env aqui.
-  # Só existe se você exportar a variável no shell antes de 'docker compose up' (ver README);
-  # nunca fica persistida em disco. Sem ela, a chave (se gerada com passphrase) não abre.
+  # Passphrase da chave privada do bastião. Fallback só: secrets.key_passphrase() lê o valor
+  # atual direto de /opt/subot/.env (montado abaixo) a cada conexão SSH; esta variável de ambiente
+  # só é consultada se aquele arquivo não existir (ex.: exportada manualmente no shell antes do
+  # 'docker compose up', sem preencher o .env — ver comentário no próprio .env). Sem ela nos dois
+  # lugares, a chave (se gerada com passphrase) não abre.
   SUBOT_SSH_KEY_PASSPHRASE: ${SUBOT_SSH_KEY_PASSPHRASE:-}
   SUBOT_AUDIT_DIR: /opt/subot/data/audit
   SUBOT_CONFIRM_STORE: /opt/subot/data/audit/.confirm_tokens.json
@@ -104,7 +106,11 @@ services:
       - ./.claude:/opt/subot/.claude
       - ./mcp-servers:/opt/subot/mcp-servers:ro
       - ./packages:/opt/subot/packages:ro
-      - ./secrets/ssh:/opt/subot/secrets/ssh:ro
+      - ./secrets/ssh:/opt/subot/secrets/ssh
+      # só leitura: usado por secrets.key_passphrase() pra ler SUBOT_SSH_KEY_PASSPHRASE direto do
+      # arquivo a cada conexão SSH, em vez de uma cópia congelada no ambiente do processo — assim
+      # trocar a passphrase (ex.: rotação de chave) não exige recriar o container.
+      - ./.env:/opt/subot/.env:ro
       - ./data/audit:/opt/subot/data/audit
       - ./data/agent-home:/home/subot
       - ./data/ollama-models:/home/subot/.ollama
@@ -112,9 +118,10 @@ services:
       # rodando no console SSH trabalhar direto no repositório real, git status/commit/push
       # incluídos, sem precisar clonar uma cópia separada dentro do container.
       - .:/home/subot/subot
-      # a chave privada do bastião continua só leitura mesmo dentro dessa cópia do repo — mount
-      # mais específico sobrepõe o mount acima só para este subdiretório.
-      - ./secrets/ssh:/home/subot/subot/secrets/ssh:ro
+      # gravável de propósito: a rotação da chave do bastião (scripts/rotate-ssh-keys.sh) roda
+      # de dentro deste container/sessão, não por um humano com shell no host — precisa poder
+      # escrever aqui. Mount mais específico sobrepõe o mount acima só para este subdiretório.
+      - ./secrets/ssh:/home/subot/subot/secrets/ssh
     # API REST (uvicorn, porta 8081) não é publicada em lugar nenhum — só alcançável de dentro da
     # rede subot_net (ex.: 'docker compose exec agent curl localhost:8081/health') até que algum
     # proxy volte a ficar na frente dela. Ver README, "Fora de escopo".

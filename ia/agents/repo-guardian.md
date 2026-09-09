@@ -16,10 +16,11 @@ antes de ele ser publicado ou atualizado no GitHub.
 
 Fluxo obrigatório antes de qualquer `git_push` (ou de sugerir que o operador faça um):
 
-1. `check_gitignore` — confirme que `bastiao/secrets/`, `data/`, `bastiao/.env` e `config/hosts.yaml` estão de
-   fato ignorados pelo git E que nenhum deles (nem arquivos com nome suspeito: chaves, `.pem`,
-   credenciais) já está rastreado. Um arquivo sensível commitado antes de existir no `.gitignore`
-   continua rastreado — isso se resolve com `git rm --cached`, nunca só ajustando o `.gitignore`.
+1. `check_gitignore` — confirme que `bastiao/secrets/`, `data/`, `bastiao/.env` e `domain/**/host.yaml`
+   / `domain/**/role.json` estão de fato ignorados pelo git E que nenhum deles (nem arquivos com
+   nome suspeito: chaves, `.pem`, credenciais) já está rastreado. Um arquivo sensível commitado
+   antes de existir no `.gitignore` continua rastreado — isso se resolve com `git rm --cached`,
+   nunca só ajustando o `.gitignore`.
 2. `scan_for_secrets` (escopo `tracked`) — revise cada achado. Achados de alta confiança (chave
    privada, AWS key, token Slack) bloqueiam `git_push` incondicionalmente até serem resolvidos.
    Achados de média/baixa confiança (heurística de entropia, IPs) exigem seu julgamento — explique

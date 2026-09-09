@@ -9,6 +9,7 @@ mkdir -p ../data/guac-db ../data/guac-recordings ../data/audit ../data/agent-hom
 mkdir -p secrets/ssh
 mkdir -p containers/guacamole/initdb
 mkdir -p ../backups
+mkdir -p ../domain
 
 # O container 'agent' roda como UID 1000 (usuário 'subot') — diretórios que ele precisa escrever
 # (home, modelos do Ollama, auditoria, achados de varredura de vulnerabilidade) precisam pertencer
@@ -30,12 +31,7 @@ else
     echo "==> .env já existe, mantendo como está"
 fi
 
-if [ ! -f ../config/hosts.yaml ]; then
-    echo "==> criando config/hosts.yaml a partir do template (config/hosts.yaml.example)"
-    cp ../config/hosts.yaml.example ../config/hosts.yaml
-else
-    echo "==> config/hosts.yaml já existe, mantendo como está"
-fi
+echo "==> domain/ pronto (vazio até o primeiro host — use a skill 'onboard-host' para adicionar um; ver domain/README.md)"
 
 KEY="secrets/ssh/bastion_id_ed25519"
 if [ ! -f "$KEY" ]; then
@@ -99,7 +95,7 @@ if [ ! -f "$CONSOLE_KEY" ]; then
     chmod 600 "$CONSOLE_KEY"
     chmod 644 "${CONSOLE_KEY}.pub"
     echo "    chave pronta — use ia/mcp/remote_desktop_connector para criar a conexão no"
-    echo "    Guacamole (host 'subot-console' -> agent:2222, ver config/hosts.yaml.example)"
+    echo "    Guacamole (host 'subot-console' -> agent:2222, ver domain/README.md)"
 else
     echo "==> chave do console SSH já existe, mantendo como está"
 fi

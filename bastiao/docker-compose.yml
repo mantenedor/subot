@@ -3,7 +3,7 @@ name: subot
 # Variáveis de ambiente do container 'agent' (Claude Code + subot_orchestrator + Ollama + API +
 # MCP servers, tudo num container só — ver README pro raciocínio da consolidação).
 x-subot-env: &subot-env
-  SUBOT_HOSTS_FILE: /opt/subot/config/hosts.yaml
+  SUBOT_DOMAIN_DIR: /opt/subot/domain
   SUBOT_ALLOWLIST_FILE: /opt/subot/ia/policy/allowlist.yaml
   SUBOT_DESTRUCTIVE_FILE: /opt/subot/ia/policy/destructive_patterns.yaml
   SUBOT_SSH_DIR: /opt/subot/secrets/ssh
@@ -101,7 +101,7 @@ services:
     depends_on: [guacamole]
     environment: *subot-env
     volumes:
-      - ../config:/opt/subot/config
+      - ../domain:/opt/subot/domain
       - ./config:/opt/subot/bastiao/config
       - ../ia/agents:/opt/subot/ia/agents
       - ../ia/mcp:/opt/subot/ia/mcp:ro

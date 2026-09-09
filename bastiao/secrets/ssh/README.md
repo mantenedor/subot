@@ -36,7 +36,7 @@ Este diretório nunca é versionado (veja `.gitignore`) — contém material cri
   cada host gerenciado. O subot usa `paramiko.RejectPolicy`: nunca aceita uma host key
   desconhecida automaticamente.
 - Chaves por-host opcionais podem ser adicionadas aqui e referenciadas pelo campo
-  `identity_file` de cada host em `config/hosts.yaml`.
+  `identity_file` de cada host em `domain/.../<hostname>/host.yaml`.
 
 Para rotacionar, use `scripts/rotate-ssh-keys.sh` (ou a skill `key-rotation`) — nunca edite chaves
 manualmente nem as apague antes de validar que os hosts aceitam a nova.

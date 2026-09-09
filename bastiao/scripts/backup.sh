@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Backup de TODOS os insumos de ambiente desta instância do subot — tudo que NÃO vive no
 # repositório git (que carrega só a ferramenta, sem nenhum dado de instância): bastiao/.env,
-# config/hosts.yaml (inventário real, gerado a partir do .example), bastiao/secrets/ (chaves SSH,
-# certificados TLS, credencial do proxy) e data/ (bancos, gravações, auditoria, modelos locais).
+# domain/ (inventário real — um host.yaml + role.json por host gerenciado), bastiao/secrets/
+# (chaves SSH, certificados TLS, credencial do proxy) e data/ (bancos, gravações, auditoria,
+# modelos locais).
 #
 # Gera um .tar.gz único, com timestamp, em ./backups/ (raiz do repo). Por padrão inclui
 # bastiao/secrets/ — sem eles, o backup não é suficiente para restaurar acesso funcional numa VM
@@ -20,7 +21,7 @@ OUT="backups/subot-env-backup-${STAMP}.tar.gz"
 
 ARGS=(data)
 DISPLAY=(data)
-[ -f config/hosts.yaml ] && ARGS+=(config/hosts.yaml) && DISPLAY+=(config/hosts.yaml)
+[ -d domain ] && ARGS+=(domain) && DISPLAY+=(domain)
 if ! $EXCLUDE_SECRETS && [ -d bastiao/secrets ]; then
     ARGS+=(bastiao/secrets)
     DISPLAY+=(bastiao/secrets)

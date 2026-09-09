@@ -17,13 +17,15 @@ def _isolate_audit(tmp_path, monkeypatch):
 
 
 def _inventory(tmp_path, *, protected: bool = False) -> Inventory:
-    hosts_file = tmp_path / "hosts.yaml"
+    domain_dir = tmp_path / "domain"
+    host_dir = domain_dir / "on-prem" / "testhost"
+    host_dir.mkdir(parents=True)
     tags = "[protected]" if protected else "[]"
-    hosts_file.write_text(
-        f"hosts:\n  testhost:\n    address: 10.0.0.5\n    user: subot\n    tags: {tags}\n",
+    (host_dir / "host.yaml").write_text(
+        f"address: 10.0.0.5\nuser: subot\ntags: {tags}\n",
         encoding="utf-8",
     )
-    return Inventory(path=hosts_file)
+    return Inventory(path=domain_dir)
 
 
 def _policy(tmp_path) -> PolicyEngine:

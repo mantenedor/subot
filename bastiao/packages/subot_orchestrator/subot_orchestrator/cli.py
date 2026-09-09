@@ -23,8 +23,6 @@ app.add_typer(identity_app, name="identity")
 
 MANAGED_IDENTITY_PATH = Path(os.environ.get(
     "SUBOT_MANAGED_IDENTITY_FILE", "/opt/subot/ia/policy/managed-identity.json"))
-HOST_IDENTITY_DIR = Path(os.environ.get(
-    "SUBOT_HOST_IDENTITY_DIR", "/opt/subot/config/policy/hosts"))
 
 
 def _load_identity_json(path: Path) -> dict:
@@ -70,11 +68,11 @@ def delegate_cmd(
 
 @identity_app.command("sync")
 def identity_sync(
-    host: str = typer.Option(..., "--host", help="nome do host no inventário (config/hosts.yaml)"),
+    host: str = typer.Option(..., "--host", help="nome do host no inventário (domain/.../<host>/host.yaml)"),
 ) -> None:
-    """Mescla ia/policy/managed-identity.json (padrão) + config/policy/hosts/<host>.json
-    (complemento, se existir) e aplica o sudoers resultante nesse host — sempre via Gate
-    (aprovação humana assíncrona, mesmo em hosts já provisionados). v1: um host por vez."""
+    """Mescla ia/policy/managed-identity.json (padrão) + role.json (complemento, se existir, ao
+    lado do host.yaml desse host em domain/) e aplica o sudoers resultante nesse host — sempre via
+    Gate (aprovação humana assíncrona, mesmo em hosts já provisionados). v1: um host por vez."""
     inventory = Inventory()
     inventory.get(host)  # levanta KeyError com mensagem clara se o host não existir
 
@@ -83,7 +81,7 @@ def identity_sync(
         typer.echo(f"{MANAGED_IDENTITY_PATH} não existe ou está vazio — rode bastiao/scripts/setup.sh primeiro.")
         raise typer.Exit(1)
     username = default.get("username", "subot")
-    host_specific = _load_identity_json(HOST_IDENTITY_DIR / f"{host}.json")
+    host_specific = _load_identity_json(inventory.host_dir(host) / "role.json")
     merged = list(default.get("sudoers", [])) + list(host_specific.get("sudoers", []))
 
     missing_key = [i for i, s in enumerate(merged) if "pattern" not in s]
@@ -116,7 +114,7 @@ def identity_sync(
 
     if not sudoers:
         typer.echo(f"nenhum padrão de sudoers para '{host}' (nem em {MANAGED_IDENTITY_PATH.name}, "
-                   f"nem em hosts/{host}.json) — nada a aplicar.")
+                   f"nem em role.json) — nada a aplicar.")
         raise typer.Exit(0)
 
     payload = {

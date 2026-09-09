@@ -7,7 +7,7 @@ description: Faz backup ou restauração dos volumes persistidos do subot (confi
 
 - Backup: rode `bash bastiao/scripts/backup.sh` (a partir da raiz do projeto, no host ou dentro do
   container `subot-agent-1`). Gera um `.tar.gz` versionado por timestamp em `./backups/`, cobrindo
-  `./data`, `bastiao/.env`, `config/hosts.yaml` e `./bastiao/secrets` (chaves SSH, TLS, credencial do proxy) — é o
+  `./data`, `bastiao/.env`, `./domain` e `./bastiao/secrets` (chaves SSH, TLS, credencial do proxy) — é o
   backup completo de tudo que o repositório git *não* contém (ver README, "Repositório vs. dados
   de ambiente"). Use `--exclude-secrets` só se for transportar o arquivo por um canal onde prefere
   não incluir material criptográfico; nesse caso o backup sozinho não é suficiente para restaurar

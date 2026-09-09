@@ -9,7 +9,7 @@
 # ia/policy/managed-identity.json.example no repositório. Exporte SUBOT_IDENTITY_JSON_B64 com
 # o conteúdo (base64) de ia/policy/managed-identity.json do bastião antes de rodar este script;
 # opcionalmente SUBOT_HOST_IDENTITY_JSON_B64 com o complemento específico deste host
-# (config/policy/hosts/<hostname>.json), se existir. SUBOT_BASTION_PUBKEY (só a chave, formato
+# (domain/.../<hostname>/role.json), se existir. SUBOT_BASTION_PUBKEY (só a chave, formato
 # antigo) continua aceito como fallback depreciado se SUBOT_IDENTITY_JSON_B64 não vier.
 #
 # Migração assumida: o usuário 'subotsu' (sudo NOPASSWD) deixa de existir totalmente. Depois deste

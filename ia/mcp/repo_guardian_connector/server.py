@@ -33,7 +33,14 @@ mcp = FastMCP("subot-repo-guardian-connector")
 MAX_SCAN_BYTES = 2_000_000
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff", ".tif"}
 
-REQUIRED_IGNORED_PATHS = ["bastiao/secrets/", "data/", "bastiao/.env", "config/hosts.yaml"]
+REQUIRED_IGNORED_PATHS = [
+    "bastiao/secrets/", "data/", "bastiao/.env",
+    # domain/**/host.yaml e domain/**/role.json casam qualquer profundidade — a sonda usa um nome
+    # de diretório sintético (nunca gravado de verdade) só para exercitar o padrão '**' contra
+    # 'git check-ignore'.
+    "domain/.subot-guardian-probe/host.yaml",
+    "domain/.subot-guardian-probe/role.json",
+]
 # Exceções deliberadas: documentação sem conteúdo sensível que o próprio .gitignore re-inclui de
 # propósito dentro de um path normalmente exigido como "todo ignorado" (ver .gitignore).
 ALLOWED_TRACKED_UNDER_REQUIRED = {"bastiao/secrets/ssh/README.md"}
@@ -239,9 +246,9 @@ def _scan_high_confidence() -> list[str]:
 
 @mcp.tool()
 def check_gitignore() -> str:
-    """Verifica se bastiao/secrets/, data/, bastiao/.env e config/hosts.yaml estão de fato ignorados pelo git E
-    que nenhum deles (nem arquivos com nome suspeito: chaves, .pem, credenciais) já está
-    rastreado — adicionar algo ao .gitignore não desfaz um commit anterior."""
+    """Verifica se bastiao/secrets/, data/, bastiao/.env e domain/**/host.yaml|role.json estão de
+    fato ignorados pelo git E que nenhum deles (nem arquivos com nome suspeito: chaves, .pem,
+    credenciais) já está rastreado — adicionar algo ao .gitignore não desfaz um commit anterior."""
     tracked = set(_run(["git", "ls-files"]).splitlines())
     required_ok = True
     lines = ["Paths obrigatórios (devem estar ignorados E não rastreados):"]

@@ -13,9 +13,10 @@ fica fora do git (veja `.gitignore`) e é preservado só via `bastiao/scripts/ba
 |---|---|
 | `bastiao/docker-compose.yml`, `bastiao/containers/`, `bastiao/packages/`, `bastiao/scripts/`, `install.sh` | `bastiao/.env` (senhas) |
 | `ia/agents/*.md`, `ia/mcp/`, `ia/skills/`, `.claude/` (espelho gerado de `ia/agents` e `ia/skills`) | |
-| `config/hosts.yaml.example` (template) | `config/hosts.yaml` (inventário real de hosts) |
+| `gate/` (instalador + daemon do gate, roda no host gerenciado) | |
+| `domain/README.md` (documenta o schema) | `domain/<domínio>/.../<host>/host.yaml` + `role.json` (inventário + sudoers real de cada host) |
 | `bastiao/config/providers.yaml`, `ia/policy/*.yaml` (defaults genéricos) | `bastiao/secrets/` (chaves SSH) |
-| `ia/policy/managed-identity.json.example` (template) | `ia/policy/managed-identity.json` + `config/policy/hosts/*.json` (identidade/sudoers real da IA em cada host) |
+| `ia/policy/managed-identity.json.example` (template) | `ia/policy/managed-identity.json` (identidade padrão real da IA) |
 | | `data/` (bancos, gravações de sessão, log de auditoria, modelos do Ollama) |
 
 Isso torna o disaster-recovery em duas partes independentes e óbvias: `git clone` (ou
@@ -113,7 +114,7 @@ Toda ação sobre um host gerenciado passa por `bastiao/packages/subot_core`:
    append-only.
 4. **`ssh.py`** usa `paramiko.RejectPolicy` — nunca aceita uma host key desconhecida
    automaticamente (`known_hosts` estrito).
-5. Hosts marcados `protected`/`prod` em `config/hosts.yaml` têm risco elevado mesmo para comandos
+5. Hosts marcados `protected`/`prod` em seu `host.yaml` (dentro de `domain/`) têm risco elevado mesmo para comandos
    normalmente `safe`, e transferência de arquivo (`ssh_upload`/`ssh_download`) sempre exige
    confirmação.
 6. Containers próprios rodam como usuário não-root; o socket do Docker nunca é montado; chaves SSH
@@ -166,8 +167,8 @@ assíncrona via Telegram antes de executar qualquer coisa.
 **Atalho de sudoers pré-promovido:** nenhum comando roda sem que um humano tenha autorizado em
 algum momento — mas essa autorização pode ter acontecido **antes**, na promoção, em vez de em
 tempo real a cada execução. `ia/policy/managed-identity.json` (padrão, aplicado a todo host) +
-`config/policy/hosts/<hostname>.json` (complemento por-host) descrevem o usuário, a chave SSH
-autorizada, e uma lista de padrões `sensitive_patterns` (de `allowlist.yaml`) já aprovados para
+`role.json` (complemento por-host, ao lado do `host.yaml` desse host em `domain/`) descrevem o
+usuário, a chave SSH autorizada, e uma lista de padrões `sensitive_patterns` (de `allowlist.yaml`) já aprovados para
 rodar via `sudo` direto, sem round-trip de Telegram. Só `sensitive` pode ser promovido —
 `destructive`/`blocked` nunca ganham esse atalho, nem em código (`SSHGateway._exec_privileged`
 só tenta `sudo -n -l` para `Risk.SENSITIVE`) nem na aplicação da política
@@ -191,8 +192,8 @@ atenção nesse passo.
 `bastiao/packages/subot_core/subot_core/confirm.py` (`ConfirmationStore.create`/`.consume`, linhas 57 e
 74) é auto-servível pela própria IA — ela gera e consome o `confirm_token` sozinha, no mesmo
 processo, sem nenhum humano ou sistema fora do seu domínio de confiança envolvido. E hoje é a
-própria IA quem escolhe qual usuário (`subot` vs. o antigo `subotsu`) usar, ao decidir qual
-entrada de `hosts.yaml` endereçar no `ssh_exec`. Com Claude Code, MCP servers e a chave SSH
+própria IA quem escolhe qual usuário (`subot` vs. o antigo `subotsu`) usar, ao decidir qual host
+(diretório em `domain/`) endereçar no `ssh_exec`. Com Claude Code, MCP servers e a chave SSH
 decifrada rodando no mesmo container, não havia fronteira de privilégio real entre "a IA
 decidindo" e "o código que aplica a política". Instrução do tipo "peça permissão sempre" não é
 controle de segurança contra um agente deliberadamente adversarial — a decisão de autorizar
@@ -273,9 +274,12 @@ subot/
 │   ├── skills/                         # fonte de .claude/skills/ (projetado por bastiao/scripts/sync-claude-agents.py)
 │   └── policy/{allowlist.yaml,destructive_patterns.yaml,managed-identity.json.example}
 ├── .claude/{settings.json,agents,skills}/    # projeção Claude Code, 100% gerada a partir de ia/
-├── config/hosts.yaml.example            # hosts.yaml (real) é gerado, nunca versionado
-├── data/                                # NUNCA versionado — todos os volumes, como diretórios do host
 ├── gate/                                # instalador + daemon do gate de privilégio, roda NO HOST GERENCIADO
+├── domain/                              # inventário dos hosts gerenciados — NUNCA versionado (exceto README.md)
+│   └── <domínio>/<região>/.../<host>/  # profundidade livre (ver domain/README.md); Inventory.reload()
+│       ├── host.yaml                   #   busca recursiva por 'host.yaml'
+│       └── role.json                   # opcional: sudoers específico deste host
+├── data/                                # NUNCA versionado — todos os volumes, como diretórios do host
 ├── backups/                             # gerado por bastiao/scripts/backup.sh
 └── install.sh                           # instalador de um comando (curl | bash) para VM nova
 ```
@@ -285,7 +289,7 @@ subot/
 ### Quickstart manual (sem o instalador)
 
 ```bash
-bash bastiao/scripts/setup.sh    # cria bastiao/.env, config/hosts.yaml, chave SSH do bastião (com passphrase — anote!), schema do Guacamole
+bash bastiao/scripts/setup.sh    # cria bastiao/.env, domain/, chave SSH do bastião (com passphrase — anote!), schema do Guacamole
 export SUBOT_SSH_KEY_PASSPHRASE='a-passphrase-que-o-setup.sh-mostrou'
 (cd bastiao && docker compose up -d)
 bash bastiao/scripts/register-console.sh   # cria a conexão "subot-console" no Guacamole
@@ -309,12 +313,14 @@ background dentro do `agent`, só na rede docker interna, autenticado por uma ch
 
 ### Adicionando um host gerenciado
 
-Edite `config/hosts.yaml` diretamente (é bind mount, reflete sem rebuild) ou use a skill
-`onboard-host` / a ferramenta MCP `inventory_connector.add_host` (sempre exige confirmação). Esse
-arquivo é gerado por `bastiao/scripts/setup.sh` a partir de `config/hosts.yaml.example` (o template
-versionado no git) e nunca é commitado — é dado de ambiente, preservado só via
-`bastiao/scripts/backup.sh`. Veja `config/hosts.yaml.example` para o formato e o significado das tags
-`protected`/`prod`.
+Use a skill `onboard-host` / a ferramenta MCP `inventory_connector.add_host` (sempre exige
+confirmação) — ela pede, além dos dados de conexão, o `domain_path` (cadeia
+domínio/região/zona/pod/cluster, ex.: `on-prem`, ou `acme/us-east/zone-a`) e grava em
+`domain/<domain_path>/<nome>/host.yaml`. Também dá pra criar o arquivo à mão (é bind mount,
+reflete sem rebuild) seguindo o mesmo schema — veja `domain/README.md` para o formato completo e
+o significado das tags `protected`/`prod`. `domain/` começa vazio numa instância nova
+(`bastiao/scripts/setup.sh` não semeia nenhum host de exemplo) — é dado de ambiente, preservado
+só via `bastiao/scripts/backup.sh`, nunca commitado (só `domain/README.md` é versionado).
 
 ### Instalando o gate de privilégio no host gerenciado
 
@@ -331,7 +337,7 @@ privilégio](#gate-de-escalação-de-privilégio-gate) acima.
 ```bash
 export SUBOT_IDENTITY_JSON_B64="$(base64 -w0 ia/policy/managed-identity.json)"   # do bastião
 # opcional, se já existir um complemento específico para este host:
-export SUBOT_HOST_IDENTITY_JSON_B64="$(base64 -w0 config/policy/hosts/<hostname>.json)"
+export SUBOT_HOST_IDENTITY_JSON_B64="$(base64 -w0 domain/<...>/<hostname>/role.json)"
 curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/gate/install.sh | sudo bash
 ```
 
@@ -362,7 +368,7 @@ controle do gate:
 passwd -l subot   # trava a senha local; login por chave pública continua funcionando normalmente
 ```
 
-**3. Registrar o host** em `config/hosts.yaml` apontando `user:` para o mesmo usuário do manifesto
+**3. Registrar o host** em `domain/` apontando `user:` para o mesmo usuário do manifesto
 de identidade (default `subot`) — veja "Adicionando um host gerenciado" acima.
 
 ### Promovendo comandos para sudoers
@@ -371,8 +377,9 @@ Depois que o gate está instalado num host, dois arquivos controlam o que roda v
 (sem esperar aprovação humana em tempo real) nesse host:
 
 - `ia/policy/managed-identity.json` — `sudoers` aqui é a lista **padrão, aplicada a todo host**.
-- `config/policy/hosts/<hostname>.json` (opcional) — `sudoers` aqui **complementa** (nunca
-  substitui) a lista padrão, só para esse host. Formato: `{"sudoers": [{"pattern": "..."}]}`.
+- `role.json` (opcional, ao lado do `host.yaml` desse host em `domain/`) — `sudoers` aqui
+  **complementa** (nunca substitui) a lista padrão, só para esse host. Formato:
+  `{"sudoers": [{"pattern": "..."}]}`.
 
 Cada `pattern` precisa já existir em `sensitive_patterns` de `ia/policy/allowlist.yaml` (não
 dá pra promover algo que a política ainda não reconhece como `sensitive`) e não pode ter prefixo

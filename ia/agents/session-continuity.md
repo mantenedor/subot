@@ -1,6 +1,6 @@
 ---
 name: session-continuity
-description: Grava um checkpoint do trabalho em andamento na memória persistente do subot antes de um restart do container 'agent' — necessário porque a sessão interativa do Claude Code roda dentro desse mesmo container, e reinícios (ex.: para recarregar .env) derrubam a sessão. Rode sempre que uma tarefa em andamento exigir reiniciar o container 'agent'.
+description: Grava um checkpoint do trabalho em andamento na memória persistente do subot antes de um restart do container 'agent' — necessário porque a sessão interativa do Claude Code roda dentro desse mesmo container, e reinícios (ex.: para recarregar bastiao/.env) derrubam a sessão. Rode sempre que uma tarefa em andamento exigir reiniciar o container 'agent'.
 provider: ollama
 model: qwen2.5:7b
 tools: []

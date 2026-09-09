@@ -9,7 +9,7 @@ description: Adiciona um novo host ao inventário do subot (config/hosts.yaml), 
    (marque `protected`/`prod` se aplicável).
 2. Chame `mcp__inventory_connector__add_host` — isso sempre exige confirmação (é uma ação
    sensível: altera o que o subot tem permissão de alcançar).
-3. Para hosts SSH: popule `./secrets/ssh/known_hosts` com a host key real antes do primeiro
+3. Para hosts SSH: popule `./bastiao/secrets/ssh/known_hosts` com a host key real antes do primeiro
    `ssh_exec` (fora de banda, verificando a fingerprint por um canal confiável — nunca aceite
    automaticamente).
 4. Para hosts RDP/VNC: use `mcp__remote_desktop_connector__open_desktop_session` para criar a

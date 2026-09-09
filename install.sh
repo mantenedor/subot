@@ -30,8 +30,8 @@ REPO_REF="${SUBOT_REPO_REF:-main}"
 # bash install.sh' por engano, ou uma sessão do agent com $PWD já na raiz do repo), o default
 # '$PWD/subot' clonaria o repo dentro dele mesmo (subot/subot/, recursivo). Detecta isso checando
 # a marca 'name: subot' no docker-compose.yml do próprio $PWD e reusa $PWD em vez de aninhar.
-if [ -z "${SUBOT_INSTALL_DIR:-}" ] && [ -d "$PWD/.git" ] && [ -f "$PWD/docker-compose.yml" ] \
-    && grep -qx "name: subot" "$PWD/docker-compose.yml"; then
+if [ -z "${SUBOT_INSTALL_DIR:-}" ] && [ -d "$PWD/.git" ] && [ -f "$PWD/bastiao/docker-compose.yml" ] \
+    && grep -qx "name: subot" "$PWD/bastiao/docker-compose.yml"; then
     INSTALL_DIR="$PWD"
 else
     INSTALL_DIR="${SUBOT_INSTALL_DIR:-$PWD/subot}"
@@ -95,7 +95,7 @@ if $ALREADY_EXISTS; then
             echo "Isto vai PARAR e REMOVER os containers do subot e APAGAR $INSTALL_DIR."
             read -r -p "Digite 'yes' para confirmar: " CONFIRM < /dev/tty
             [ "$CONFIRM" = "yes" ] || { echo "abortado."; exit 1; }
-            [ -f "$INSTALL_DIR/docker-compose.yml" ] && (cd "$INSTALL_DIR" && docker compose down) || true
+            [ -f "$INSTALL_DIR/bastiao/docker-compose.yml" ] && (cd "$INSTALL_DIR/bastiao" && docker compose down) || true
             rm -rf "$INSTALL_DIR"
             ;;
         b|B)
@@ -113,9 +113,9 @@ if $ALREADY_EXISTS; then
                 [ -n "${BK:-}" ] && break
             done < /dev/tty
             cd "$INSTALL_DIR"
-            docker compose down
-            bash scripts/restore.sh "$BK"
-            docker compose up -d
+            (cd bastiao && docker compose down)
+            bash bastiao/scripts/restore.sh "$BK"
+            (cd bastiao && docker compose up -d)
             echo "restaurado. Se o backup incluía a chave SSH, exporte SUBOT_SSH_KEY_PASSPHRASE"
             echo "(a passphrase guardada quando ela foi gerada) e rode 'docker compose up -d' de novo."
             exit 0
@@ -150,17 +150,20 @@ fi
 
 cd "$INSTALL_DIR"
 
-log "rodando scripts/setup.sh (gera .env, hosts.yaml, chaves SSH, credenciais — nunca sobrescreve o que já existe)"
+log "rodando bastiao/scripts/setup.sh (gera .env, hosts.yaml, chaves SSH, credenciais — nunca sobrescreve o que já existe)"
 echo "    ATENÇÃO: se este for o primeiro setup, uma passphrase da chave SSH vai aparecer abaixo"
 echo "    UMA VEZ — copie e guarde num lugar seguro (gerenciador de senhas). Ela já é usada"
 echo "    automaticamente nesta execução; só vai fazer falta digitá-la de novo numa reinstalação"
 echo "    ou restauração futura."
-# 'source' (não 'bash scripts/setup.sh') de propósito: setup.sh gera a passphrase numa variável
-# de shell, e sourcing deixa essa variável disponível aqui, no MESMO processo — sem escrever a
-# passphrase em nenhum arquivo, e sem precisar de um segundo 'docker compose up' manual depois.
+# 'source' (não 'bash bastiao/scripts/setup.sh') de propósito: setup.sh gera a passphrase numa
+# variável de shell, e sourcing deixa essa variável disponível aqui, no MESMO processo — sem
+# escrever a passphrase em nenhum arquivo, e sem precisar de um segundo 'docker compose up' manual
+# depois. Efeito colateral: setup.sh faz 'cd .. ' relativo a si mesmo, então sourcing também muda
+# o cwd DESTE script pra $INSTALL_DIR/bastiao — é por isso que as chamadas 'scripts/...' logo
+# abaixo (sem prefixo 'bastiao/') continuam resolvendo certo.
 GENERATED_SSH_PASSPHRASE=""
 # shellcheck disable=SC1091
-source scripts/setup.sh
+source bastiao/scripts/setup.sh
 if [ -n "$GENERATED_SSH_PASSPHRASE" ]; then
     export SUBOT_SSH_KEY_PASSPHRASE="$GENERATED_SSH_PASSPHRASE"
 fi
@@ -187,7 +190,7 @@ cat <<EOF
 - Se uma passphrase de chave SSH apareceu acima, guarde-a agora num lugar seguro — ela não fica
   salva em nenhum arquivo, e só volta a fazer falta numa reinstalação ou restauração de backup.
 - Guacamole fica em http://<IP-desta-VM>:8080/guacamole/ (HTTP, sem TLS — ver README sobre o
-  trade-off de segurança dessa porta). Login: usuário/senha em .env (GUACAMOLE_ADMIN_USER/
+  trade-off de segurança dessa porta). Login: usuário/senha em bastiao/.env (GUACAMOLE_ADMIN_USER/
   GUACAMOLE_ADMIN_PASSWORD, default guacadmin/guacadmin — troque depois do primeiro login). A
   conexão 'subot-console' já está lá, pronta pra abrir um shell dentro do container 'agent'.
 - Pra reinstalar do zero ou restaurar de um backup: rode este instalador de novo.

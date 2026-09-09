@@ -21,7 +21,7 @@ atualiza nada sem confirmação/gate explícito à parte.
      pacotes) — mas nunca instale essas ferramentas num host gerenciado sem pedir confirmação
      primeiro (é uma mudança de estado no host).
    - Hosts `protected`/`prod` (tag em `hosts.yaml`): mesmo sendo comandos `safe`, redobre a atenção
-     ao relatar — a política já eleva o risco desses hosts (ver `packages/subot_core/subot_core/policy.py`).
+     ao relatar — a política já eleva o risco desses hosts (ver `bastiao/packages/subot_core/subot_core/policy.py`).
 3. Para cada achado (advisory ID/CVE, pacote, severidade), verifique em
    `data/security-findings/hosts.jsonl` se esse mesmo achado já foi registrado **para este host**
    numa varredura anterior sem ter sido resolvido — evita ficar re-alertando o mesmo item já

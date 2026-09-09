@@ -33,10 +33,10 @@ mcp = FastMCP("subot-repo-guardian-connector")
 MAX_SCAN_BYTES = 2_000_000
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff", ".tif"}
 
-REQUIRED_IGNORED_PATHS = ["secrets/", "data/", ".env", "config/hosts.yaml"]
+REQUIRED_IGNORED_PATHS = ["bastiao/secrets/", "data/", "bastiao/.env", "config/hosts.yaml"]
 # Exceções deliberadas: documentação sem conteúdo sensível que o próprio .gitignore re-inclui de
 # propósito dentro de um path normalmente exigido como "todo ignorado" (ver .gitignore).
-ALLOWED_TRACKED_UNDER_REQUIRED = {"secrets/ssh/README.md"}
+ALLOWED_TRACKED_UNDER_REQUIRED = {"bastiao/secrets/ssh/README.md"}
 SUSPICIOUS_NAME_PATTERNS = [
     re.compile(r"(?i)\.env(\..+)?$"),
     re.compile(r"(?i)id_(rsa|dsa|ecdsa|ed25519)$"),
@@ -239,7 +239,7 @@ def _scan_high_confidence() -> list[str]:
 
 @mcp.tool()
 def check_gitignore() -> str:
-    """Verifica se secrets/, data/, .env e config/hosts.yaml estão de fato ignorados pelo git E
+    """Verifica se bastiao/secrets/, data/, bastiao/.env e config/hosts.yaml estão de fato ignorados pelo git E
     que nenhum deles (nem arquivos com nome suspeito: chaves, .pem, credenciais) já está
     rastreado — adicionar algo ao .gitignore não desfaz um commit anterior."""
     tracked = set(_run(["git", "ls-files"]).splitlines())

@@ -16,7 +16,7 @@ antes de ele ser publicado ou atualizado no GitHub.
 
 Fluxo obrigatório antes de qualquer `git_push` (ou de sugerir que o operador faça um):
 
-1. `check_gitignore` — confirme que `secrets/`, `data/`, `.env` e `config/hosts.yaml` estão de
+1. `check_gitignore` — confirme que `bastiao/secrets/`, `data/`, `bastiao/.env` e `config/hosts.yaml` estão de
    fato ignorados pelo git E que nenhum deles (nem arquivos com nome suspeito: chaves, `.pem`,
    credenciais) já está rastreado. Um arquivo sensível commitado antes de existir no `.gitignore`
    continua rastreado — isso se resolve com `git rm --cached`, nunca só ajustando o `.gitignore`.

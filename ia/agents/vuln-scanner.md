@@ -41,5 +41,5 @@ Regras inegociáveis:
    operador humano consiga auditar depois o que foi checado e quando.
 
 Observação: este agente usa por padrão um provedor remoto (`anthropic`) — só funciona se
-`ANTHROPIC_API_KEY` estiver definido em `.env`; caso contrário, cai automaticamente no fallback
+`ANTHROPIC_API_KEY` estiver definido em `bastiao/.env`; caso contrário, cai automaticamente no fallback
 local (`ollama:qwen2.5:14b`).

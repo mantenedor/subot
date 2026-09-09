@@ -18,7 +18,7 @@ x-subot-env: &subot-env
   SUBOT_CONFIRM_TOKEN_TTL_SECONDS: ${SUBOT_CONFIRM_TOKEN_TTL_SECONDS:-300}
   SUBOT_STRICT_KEY_PERMS: ${SUBOT_STRICT_KEY_PERMS:-false}
   SUBOT_AGENTS_DIR: /opt/subot/ia/agents
-  SUBOT_PROVIDERS_FILE: /opt/subot/config/providers.yaml
+  SUBOT_PROVIDERS_FILE: /opt/subot/bastiao/config/providers.yaml
   SUBOT_MCP_SERVERS_DIR: /opt/subot/ia/mcp
   GUACAMOLE_BASE_URL: http://guacamole:8080/guacamole
   GUACAMOLE_ADMIN_USER: ${GUACAMOLE_ADMIN_USER:-guacadmin}
@@ -46,7 +46,7 @@ services:
       POSTGRES_USER: ${GUACDB_USER:-guacamole}
       POSTGRES_PASSWORD: ${GUACDB_PASSWORD:?defina GUACDB_PASSWORD em .env — rode scripts/setup.sh}
     volumes:
-      - ./data/guac-db:/var/lib/postgresql/data
+      - ../data/guac-db:/var/lib/postgresql/data
       - ./containers/guacamole/initdb:/docker-entrypoint-initdb.d:ro
     networks: [subot_net]
     healthcheck:
@@ -60,7 +60,7 @@ services:
     image: guacamole/guacd:1.5.5
     restart: unless-stopped
     volumes:
-      - ./data/guac-recordings:/var/lib/guacd/recordings
+      - ../data/guac-recordings:/var/lib/guacd/recordings
     networks: [subot_net]
     mem_limit: 512m
 
@@ -101,28 +101,29 @@ services:
     depends_on: [guacamole]
     environment: *subot-env
     volumes:
-      - ./config:/opt/subot/config
-      - ./ia/agents:/opt/subot/ia/agents
-      - ./ia/mcp:/opt/subot/ia/mcp:ro
-      - ./ia/policy:/opt/subot/ia/policy
-      - ./.claude:/opt/subot/.claude
+      - ../config:/opt/subot/config
+      - ./config:/opt/subot/bastiao/config
+      - ../ia/agents:/opt/subot/ia/agents
+      - ../ia/mcp:/opt/subot/ia/mcp:ro
+      - ../ia/policy:/opt/subot/ia/policy
+      - ../.claude:/opt/subot/.claude
       - ./packages:/opt/subot/packages:ro
       - ./secrets/ssh:/opt/subot/secrets/ssh
       # só leitura: usado por secrets.key_passphrase() pra ler SUBOT_SSH_KEY_PASSPHRASE direto do
       # arquivo a cada conexão SSH, em vez de uma cópia congelada no ambiente do processo — assim
       # trocar a passphrase (ex.: rotação de chave) não exige recriar o container.
       - ./.env:/opt/subot/.env:ro
-      - ./data/audit:/opt/subot/data/audit
-      - ./data/agent-home:/home/subot
-      - ./data/ollama-models:/home/subot/.ollama
+      - ../data/audit:/opt/subot/data/audit
+      - ../data/agent-home:/home/subot
+      - ../data/ollama-models:/home/subot/.ollama
       # projeto inteiro (com .git) montado no home do usuário — dá pro Claude Code (ou qualquer IA)
       # rodando no console SSH trabalhar direto no repositório real, git status/commit/push
       # incluídos, sem precisar clonar uma cópia separada dentro do container.
-      - .:/home/subot/subot
+      - ..:/home/subot/subot
       # gravável de propósito: a rotação da chave do bastião (scripts/rotate-ssh-keys.sh) roda
       # de dentro deste container/sessão, não por um humano com shell no host — precisa poder
       # escrever aqui. Mount mais específico sobrepõe o mount acima só para este subdiretório.
-      - ./secrets/ssh:/home/subot/subot/secrets/ssh
+      - ./secrets/ssh:/home/subot/subot/bastiao/secrets/ssh
     # API REST (uvicorn, porta 8081) não é publicada em lugar nenhum — só alcançável de dentro da
     # rede subot_net (ex.: 'docker compose exec agent curl localhost:8081/health') até que algum
     # proxy volte a ficar na frente dela. Ver README, "Fora de escopo".

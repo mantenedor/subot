@@ -44,11 +44,11 @@ do zero ou restaurar de um backup.
 
 Depois do deploy:
 
-- **GUI (Guacamole)**: `http://IP-DA-VM:8080/guacamole/` — login/senha em `.env`
+- **GUI (Guacamole)**: `http://IP-DA-VM:8080/guacamole/` — login/senha em `bastiao/.env`
   (`GUACAMOLE_ADMIN_USER`/`GUACAMOLE_ADMIN_PASSWORD`, padrão `guacadmin`/`guacadmin` — troque no
   primeiro acesso).
-- **CLI/Claude Code**: `docker compose exec -it agent bash`, depois `claude` ou
-  `subot agent list`.
+- **CLI/Claude Code**: a partir de `bastiao/`, `docker compose exec -it agent bash`, depois `claude`
+  ou `subot agent list`.
 
 > ⚠️ **Sem TLS na frente**, `8080` serve Guacamole em texto claro — antes de expor a porta a uma
 > rede não confiável, veja [Segurança na exposição de

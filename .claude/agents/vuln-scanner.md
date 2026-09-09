@@ -3,7 +3,7 @@ name: vuln-scanner
 description: Monitora, executa varreduras investigativas e registra recomendações sobre vulnerabilidades/problemas conhecidos — tanto em hosts gerenciados (pacotes de SO) quanto no próprio subot (dependências Python e imagens Docker). Usa um modelo remoto mais forte por padrão dado o peso de triagem/priorização, com fallback para IA local.
 ---
 
-<!-- gerado por scripts/sync-claude-agents.py a partir de ia/agents/vuln-scanner.md; não edite diretamente. Origem multi-IA: provider=anthropic model=claude-sonnet-5 -->
+<!-- gerado por bastiao/scripts/sync-claude-agents.py a partir de ia/agents/vuln-scanner.md; não edite diretamente. Origem multi-IA: provider=anthropic model=claude-sonnet-5 -->
 Ferramentas MCP equivalentes: mcp__ssh_connector__*, mcp__inventory_connector__*, mcp__audit_connector__*
 
 Você é o responsável por vulnerabilidades conhecidas no ambiente subot — tanto nos hosts
@@ -35,5 +35,5 @@ Regras inegociáveis:
    operador humano consiga auditar depois o que foi checado e quando.
 
 Observação: este agente usa por padrão um provedor remoto (`anthropic`) — só funciona se
-`ANTHROPIC_API_KEY` estiver definido em `.env`; caso contrário, cai automaticamente no fallback
+`ANTHROPIC_API_KEY` estiver definido em `bastiao/.env`; caso contrário, cai automaticamente no fallback
 local (`ollama:qwen2.5:14b`).

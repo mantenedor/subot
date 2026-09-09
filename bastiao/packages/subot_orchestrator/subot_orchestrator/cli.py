@@ -80,7 +80,7 @@ def identity_sync(
 
     default = _load_identity_json(MANAGED_IDENTITY_PATH)
     if not default:
-        typer.echo(f"{MANAGED_IDENTITY_PATH} não existe ou está vazio — rode scripts/setup.sh primeiro.")
+        typer.echo(f"{MANAGED_IDENTITY_PATH} não existe ou está vazio — rode bastiao/scripts/setup.sh primeiro.")
         raise typer.Exit(1)
     username = default.get("username", "subot")
     host_specific = _load_identity_json(HOST_IDENTITY_DIR / f"{host}.json")

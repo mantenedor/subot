@@ -7,19 +7,19 @@ Detalhes de design, controles de segurança, dimensionamento e roadmap. Para ins
 
 Este repositório carrega **só a ferramenta** — código, compose, agentes, skills, políticas
 default — e nunca nenhum dado de uma instância específica. Tudo que identifica *um* ambiente real
-fica fora do git (veja `.gitignore`) e é preservado só via `scripts/backup.sh`:
+fica fora do git (veja `.gitignore`) e é preservado só via `bastiao/scripts/backup.sh`:
 
 | No repositório (git) | Só no ambiente (backup, nunca git) |
 |---|---|
-| `docker-compose.yml`, `containers/`, `packages/`, `scripts/`, `install.sh` | `.env` (senhas) |
+| `bastiao/docker-compose.yml`, `bastiao/containers/`, `bastiao/packages/`, `bastiao/scripts/`, `install.sh` | `bastiao/.env` (senhas) |
 | `ia/agents/*.md`, `ia/mcp/`, `ia/skills/`, `.claude/` (espelho gerado de `ia/agents` e `ia/skills`) | |
 | `config/hosts.yaml.example` (template) | `config/hosts.yaml` (inventário real de hosts) |
-| `config/providers.yaml`, `ia/policy/*.yaml` (defaults genéricos) | `secrets/` (chaves SSH) |
+| `bastiao/config/providers.yaml`, `ia/policy/*.yaml` (defaults genéricos) | `bastiao/secrets/` (chaves SSH) |
 | `ia/policy/managed-identity.json.example` (template) | `ia/policy/managed-identity.json` + `config/policy/hosts/*.json` (identidade/sudoers real da IA em cada host) |
 | | `data/` (bancos, gravações de sessão, log de auditoria, modelos do Ollama) |
 
 Isso torna o disaster-recovery em duas partes independentes e óbvias: `git clone` (ou
-`install.sh`) traz a ferramenta pronta do zero; `scripts/backup.sh`/`restore.sh` carrega os
+`install.sh`) traz a ferramenta pronta do zero; `bastiao/scripts/backup.sh`/`restore.sh` carrega os
 insumos de uma instância específica por cima dela.
 
 ## Princípio central: multi-IA, local-first
@@ -39,13 +39,13 @@ tools: [ssh_connector, remote_desktop_connector, inventory_connector, audit_conn
 
 Esse mesmo arquivo é consumido de duas formas:
 
-- **Pelo `subot_orchestrator`** (`packages/subot_orchestrator`) — motor próprio que resolve
+- **Pelo `subot_orchestrator`** (`bastiao/packages/subot_orchestrator`) — motor próprio que resolve
   `provider`+`model` via [LiteLLM](https://github.com/BerriAI/litellm) e dá ao agente acesso às
   ferramentas MCP diretamente. Roda 100% local usando o serviço `ollama` do compose, sem depender
   do Claude Code. É o caminho recomendado para uso contínuo/automatizado, e permite **delegação
   paralela**: um agente coordenador pode disparar vários outros — cada um em um provedor/modelo
   diferente — simultaneamente (`subot delegate`).
-- **Pelo Claude Code**, para uso interativo. `scripts/sync-claude-agents.py` projeta
+- **Pelo Claude Code**, para uso interativo. `bastiao/scripts/sync-claude-agents.py` projeta
   `ia/agents/*.md` para `.claude/agents/*.md` no formato que o Claude Code entende (o Claude Code
   sempre roda no seu próprio modelo; os campos `provider`/`model`/`fallback` só importam para o
   orquestrador).
@@ -97,7 +97,7 @@ nome completo (`subot-agent-1`), `docker compose exec` aceita o nome curto do se
 
 ## Controles de segurança
 
-Toda ação sobre um host gerenciado passa por `packages/subot_core`:
+Toda ação sobre um host gerenciado passa por `bastiao/packages/subot_core`:
 
 1. **`policy.py`** classifica cada comando como `safe` / `sensitive` / `destructive` / `blocked`
    a partir de `ia/policy/allowlist.yaml` e `destructive_patterns.yaml`. Comando desconhecido
@@ -119,9 +119,9 @@ Toda ação sobre um host gerenciado passa por `packages/subot_core`:
 6. Containers próprios rodam como usuário não-root; o socket do Docker nunca é montado; chaves SSH
    são montadas somente-leitura.
 7. **A chave privada SSH do bastião é protegida por passphrase** (AES, formato nativo do
-   OpenSSH/paramiko) — o arquivo em `secrets/ssh/` nunca é texto plano utilizável sozinho, mesmo
+   OpenSSH/paramiko) — o arquivo em `bastiao/secrets/ssh/` nunca é texto plano utilizável sozinho, mesmo
    que alguém tenha acesso de leitura ao disco do host. A passphrase é gerada por
-   `scripts/setup.sh`, mostrada uma única vez no terminal e **nunca é salva em nenhum arquivo**
+   `bastiao/scripts/setup.sh`, mostrada uma única vez no terminal e **nunca é salva em nenhum arquivo**
    (nem em `.env`, nem no backup). Isso protege contra disco/backup roubado; não protege contra
    alguém com root no host que decide entrar no container em execução (`docker exec`) — nenhuma
    configuração de container consegue evitar isso, é limitação de qualquer coisa rodando no mesmo
@@ -133,11 +133,11 @@ Toda ação sobre um host gerenciado passa por `packages/subot_core`:
    container e não exige nada.
 
    **Risco operacional que você precisa aceitar conscientemente**: como a passphrase nunca é
-   persistida, ela também **não entra em `scripts/backup.sh`**. Se você não guardá-la em algum
+   persistida, ela também **não entra em `bastiao/scripts/backup.sh`**. Se você não guardá-la em algum
    lugar durável (gerenciador de senhas, cofre da organização) no momento em que ela aparece,
    restaurar o backup numa VM nova devolve a chave cifrada **sem nenhuma forma de abri-la** — a
    única saída nesse caso é gerar uma chave nova e redistribuir a chave pública para todos os
-   hosts gerenciados. `scripts/backup.sh` e `scripts/restore.sh` avisam isso a cada execução.
+   hosts gerenciados. `bastiao/scripts/backup.sh` e `bastiao/scripts/restore.sh` avisam isso a cada execução.
 
 ### Segurança na exposição de rede
 
@@ -188,7 +188,7 @@ destrutivo na lista `sudoers` não é pego automaticamente até a instalação; 
 atenção nesse passo.
 
 **Por que não bastava o `confirm.py` existente:** o fluxo de confirmação em duas etapas de
-`packages/subot_core/subot_core/confirm.py` (`ConfirmationStore.create`/`.consume`, linhas 57 e
+`bastiao/packages/subot_core/subot_core/confirm.py` (`ConfirmationStore.create`/`.consume`, linhas 57 e
 74) é auto-servível pela própria IA — ela gera e consome o `confirm_token` sozinha, no mesmo
 processo, sem nenhum humano ou sistema fora do seu domínio de confiança envolvido. E hoje é a
 própria IA quem escolhe qual usuário (`subot` vs. o antigo `subotsu`) usar, ao decidir qual
@@ -230,7 +230,7 @@ Como cheguei nesses números:
   vCPU só para codificar vídeo.
 - **Ollama (CPU-only)** é o item que mais pesa: com os defaults já ajustados neste projeto para
   CPU (`qwen2.5:14b` no `infra-operator`, `qwen2.5:7b` no `stack-maintainer` — ver
-  `config/providers.yaml` e `ia/agents/*.md`), cada modelo carregado ocupa ~10–12 GB (14b) ou ~5–6 GB
+  `bastiao/config/providers.yaml` e `ia/agents/*.md`), cada modelo carregado ocupa ~10–12 GB (14b) ou ~5–6 GB
   (7b) de RAM residente; em uma delegação (`subot delegate`) ambos podem ficar carregados ao mesmo
   tempo, ~16–18 GB. Para throughput razoável (poucos tokens/s a alguns tokens/s) recomenda-se pelo
   menos 8 núcleos físicos dedicados e boa banda de memória (DDR4-3200 dual-channel ou melhor).
@@ -256,24 +256,28 @@ reavaliar o dimensionamento nesse momento em vez de superdimensionar CPU/RAM hoj
 
 ```
 subot/
-├── docker-compose.yml
-├── containers/agent/                  # Dockerfile/entrypoint do agent (Claude Code+Ollama+API)
-├── packages/
-│   ├── subot_core/                    # segurança: inventory, policy, confirm, audit, ssh, secrets, guac_client
-│   └── subot_orchestrator/            # multi-IA: providers, agent_loader, mcp_client, runner, delegator, cli
+├── bastiao/                            # runtime do próprio bastião (stack Docker)
+│   ├── docker-compose.yml
+│   ├── containers/agent/               # Dockerfile/entrypoint do agent (Claude Code+Ollama+API)
+│   ├── packages/
+│   │   ├── subot_core/                 # segurança: inventory, policy, confirm, audit, ssh, secrets, guac_client
+│   │   └── subot_orchestrator/         # multi-IA: providers, agent_loader, mcp_client, runner, delegator, cli
+│   ├── config/providers.yaml           # config do orquestrador multi-IA (não é identidade/permissão)
+│   ├── secrets/ssh/                    # NUNCA versionado — dado de ambiente
+│   ├── .env                            # NUNCA versionado — dado de ambiente
+│   └── scripts/                        # setup, pull-models, sync, backup, restore, rotação de chaves,
+│                                        # healthcheck
 ├── ia/
-│   ├── agents/                        # definições canônicas de agente (multi-IA) — fonte de .claude/agents/
+│   ├── agents/                         # definições canônicas de agente (multi-IA) — fonte de .claude/agents/
 │   ├── mcp/{ssh,remote_desktop,inventory,audit,repo_guardian}_connector/
-│   ├── skills/                        # fonte de .claude/skills/ (projetado por scripts/sync-claude-agents.py)
+│   ├── skills/                         # fonte de .claude/skills/ (projetado por bastiao/scripts/sync-claude-agents.py)
 │   └── policy/{allowlist.yaml,destructive_patterns.yaml,managed-identity.json.example}
-├── .claude/{settings.json,agents,skills}/   # projeção Claude Code, 100% gerada a partir de ia/
-├── config/{hosts.yaml.example,providers.yaml}   # hosts.yaml (real) é gerado, nunca versionado
-├── secrets/ssh/                       # NUNCA versionado — dado de ambiente
-├── data/                              # NUNCA versionado — todos os volumes, como diretórios do host
-├── gate/                               # instalador + daemon do gate de privilégio, roda NO HOST GERENCIADO
-├── install.sh                         # instalador de um comando (curl | bash) para VM nova
-└── scripts/                           # setup, pull-models, sync, backup, restore, rotação de chaves,
-                                        # healthcheck
+├── .claude/{settings.json,agents,skills}/    # projeção Claude Code, 100% gerada a partir de ia/
+├── config/hosts.yaml.example            # hosts.yaml (real) é gerado, nunca versionado
+├── data/                                # NUNCA versionado — todos os volumes, como diretórios do host
+├── gate/                                # instalador + daemon do gate de privilégio, roda NO HOST GERENCIADO
+├── backups/                             # gerado por bastiao/scripts/backup.sh
+└── install.sh                           # instalador de um comando (curl | bash) para VM nova
 ```
 
 ## Guia de operação
@@ -281,12 +285,12 @@ subot/
 ### Quickstart manual (sem o instalador)
 
 ```bash
-bash scripts/setup.sh          # cria .env, config/hosts.yaml, chave SSH do bastião (com passphrase — anote!), schema do Guacamole
+bash bastiao/scripts/setup.sh    # cria bastiao/.env, config/hosts.yaml, chave SSH do bastião (com passphrase — anote!), schema do Guacamole
 export SUBOT_SSH_KEY_PASSPHRASE='a-passphrase-que-o-setup.sh-mostrou'
-docker compose up -d
-bash scripts/register-console.sh   # cria a conexão "subot-console" no Guacamole
-bash scripts/pull-models.sh    # baixa os modelos locais default no Ollama (qwen2.5:14b e 7b)
-python3 scripts/sync-claude-agents.py   # projeta ia/agents/*.md -> .claude/agents/*.md (e ia/skills/ -> .claude/skills/)
+(cd bastiao && docker compose up -d)
+bash bastiao/scripts/register-console.sh   # cria a conexão "subot-console" no Guacamole
+bash bastiao/scripts/pull-models.sh    # baixa os modelos locais default no Ollama (qwen2.5:14b e 7b)
+python3 bastiao/scripts/sync-claude-agents.py   # projeta ia/agents/*.md -> .claude/agents/*.md (e ia/skills/ -> .claude/skills/)
 ```
 
 - API REST: não publicada — só de dentro da rede `subot_net` ou via `docker compose exec agent`.
@@ -296,20 +300,20 @@ python3 scripts/sync-claude-agents.py   # projeta ia/agents/*.md -> .claude/agen
 
 ### Console SSH da IA via Guacamole
 
-`install.sh` (e `scripts/register-console.sh`, que ele chama) já deixam uma conexão
+`install.sh` (e `bastiao/scripts/register-console.sh`, que ele chama) já deixam uma conexão
 **"subot-console"** pronta no Guacamole — login no Guacamole (`http://IP:8080/guacamole/`) e
 clicar nela cai direto num shell dentro do container `agent` (de onde dá pra rodar `claude`,
 `subot agent list`, etc.), sem `docker exec` e sem tocar a rede/sshd da VM. Um `dropbear` roda em
 background dentro do `agent`, só na rede docker interna, autenticado por uma chave dedicada
-(`secrets/ssh/guac_console_ed25519`, gerada por `scripts/setup.sh`).
+(`bastiao/secrets/ssh/guac_console_ed25519`, gerada por `bastiao/scripts/setup.sh`).
 
 ### Adicionando um host gerenciado
 
 Edite `config/hosts.yaml` diretamente (é bind mount, reflete sem rebuild) ou use a skill
 `onboard-host` / a ferramenta MCP `inventory_connector.add_host` (sempre exige confirmação). Esse
-arquivo é gerado por `scripts/setup.sh` a partir de `config/hosts.yaml.example` (o template
+arquivo é gerado por `bastiao/scripts/setup.sh` a partir de `config/hosts.yaml.example` (o template
 versionado no git) e nunca é commitado — é dado de ambiente, preservado só via
-`scripts/backup.sh`. Veja `config/hosts.yaml.example` para o formato e o significado das tags
+`bastiao/scripts/backup.sh`. Veja `config/hosts.yaml.example` para o formato e o significado das tags
 `protected`/`prod`.
 
 ### Instalando o gate de privilégio no host gerenciado
@@ -346,8 +350,8 @@ partir do orquestrador/bastião:
 
 ```bash
 ssh subot@<host>                                                  # testa conectividade (usuário/senha temporários)
-ssh-copy-id -i secrets/ssh/bastion_id_ed25519.pub subot@<host>    # transfere a chave pública do bastião
-ssh -i secrets/ssh/bastion_id_ed25519 subot@<host>                # confirma login por chave, sem senha
+ssh-copy-id -i bastiao/secrets/ssh/bastion_id_ed25519.pub subot@<host>    # transfere a chave pública do bastião
+ssh -i bastiao/secrets/ssh/bastion_id_ed25519 subot@<host>                # confirma login por chave, sem senha
 ```
 
 Depois de confirmar o login por chave, **suprima a autenticação por senha do usuário `subot`** no
@@ -393,14 +397,14 @@ docker compose exec agent subot identity show <nome>
 ### Adicionando ou trocando a IA de um agente
 
 Edite (ou crie) um arquivo em `ia/agents/*.md`. Campos obrigatórios: `name`, `description`,
-`provider` (um id de `config/providers.yaml`), `model`. Opcionais: `tools`, `fallback`,
-`temperature`. Depois de editar, rode `python3 scripts/sync-claude-agents.py` para atualizar a
+`provider` (um id de `bastiao/config/providers.yaml`), `model`. Opcionais: `tools`, `fallback`,
+`temperature`. Depois de editar, rode `python3 bastiao/scripts/sync-claude-agents.py` para atualizar a
 projeção em `.claude/agents/`.
 
 Para usar um motor local diferente do Ollama (LM Studio, vLLM), preencha `LMSTUDIO_BASE_URL` ou
-`VLLM_BASE_URL` em `.env` e aponte `provider: lmstudio` / `provider: vllm` no agente — nenhum dos
+`VLLM_BASE_URL` em `bastiao/.env` e aponte `provider: lmstudio` / `provider: vllm` no agente — nenhum dos
 dois exige chave de API. Para um provedor remoto (`anthropic`, `openai`, `openrouter`), preencha a
-chave correspondente em `.env`.
+chave correspondente em `bastiao/.env`.
 
 ### Delegação multi-agente
 

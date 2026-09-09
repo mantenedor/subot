@@ -1,6 +1,6 @@
 """Carrega definições canônicas de agente a partir de ia/agents/*.md (front matter YAML + corpo
 Markdown). Este é o formato fonte da verdade, multi-IA — tanto o subot_orchestrator quanto
-scripts/sync-claude-agents.py (projeção para .claude/agents/) partem daqui."""
+bastiao/scripts/sync-claude-agents.py (projeção para .claude/agents/) partem daqui."""
 from __future__ import annotations
 
 import os

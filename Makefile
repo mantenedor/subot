@@ -1,34 +1,34 @@
 .PHONY: setup pull-models up down logs ps backup restore rotate-keys sync-agents healthcheck
 
 setup:
-	bash scripts/setup.sh
+	bash bastiao/scripts/setup.sh
 
 pull-models:
-	bash scripts/pull-models.sh
+	bash bastiao/scripts/pull-models.sh
 
 up:
-	docker compose up -d
+	cd bastiao && docker compose up -d
 
 down:
-	docker compose down
+	cd bastiao && docker compose down
 
 logs:
-	docker compose logs -f
+	cd bastiao && docker compose logs -f
 
 ps:
-	docker compose ps
+	cd bastiao && docker compose ps
 
 backup:
-	bash scripts/backup.sh
+	bash bastiao/scripts/backup.sh
 
 restore:
-	bash scripts/restore.sh $(ARCHIVE)
+	bash bastiao/scripts/restore.sh $(ARCHIVE)
 
 rotate-keys:
-	bash scripts/rotate-ssh-keys.sh
+	bash bastiao/scripts/rotate-ssh-keys.sh
 
 sync-agents:
-	python3 scripts/sync-claude-agents.py
+	python3 bastiao/scripts/sync-claude-agents.py
 
 healthcheck:
-	bash scripts/healthcheck.sh
+	bash bastiao/scripts/healthcheck.sh

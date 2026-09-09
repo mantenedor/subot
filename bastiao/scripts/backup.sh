@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Backup de TODOS os insumos de ambiente desta instância do subot — tudo que NÃO vive no
-# repositório git (que carrega só a ferramenta, sem nenhum dado de instância): .env,
-# config/hosts.yaml (inventário real, gerado a partir do .example), secrets/ (chaves SSH,
+# repositório git (que carrega só a ferramenta, sem nenhum dado de instância): bastiao/.env,
+# config/hosts.yaml (inventário real, gerado a partir do .example), bastiao/secrets/ (chaves SSH,
 # certificados TLS, credencial do proxy) e data/ (bancos, gravações, auditoria, modelos locais).
 #
-# Gera um .tar.gz único, com timestamp, em ./backups/. Por padrão inclui secrets/ — sem eles, o
-# backup não é suficiente para restaurar acesso funcional numa VM nova. Use --exclude-secrets só
-# se for transportar/guardar o arquivo por um canal em que prefere não incluir material
-# criptográfico (nesse caso, leve secrets/ separadamente).
+# Gera um .tar.gz único, com timestamp, em ./backups/ (raiz do repo). Por padrão inclui
+# bastiao/secrets/ — sem eles, o backup não é suficiente para restaurar acesso funcional numa VM
+# nova. Use --exclude-secrets só se for transportar/guardar o arquivo por um canal em que prefere
+# não incluir material criptográfico (nesse caso, leve bastiao/secrets/ separadamente).
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 EXCLUDE_SECRETS=false
 [ "${1:-}" = "--exclude-secrets" ] && EXCLUDE_SECRETS=true
@@ -21,20 +21,22 @@ OUT="backups/subot-env-backup-${STAMP}.tar.gz"
 ARGS=(data)
 DISPLAY=(data)
 [ -f config/hosts.yaml ] && ARGS+=(config/hosts.yaml) && DISPLAY+=(config/hosts.yaml)
-if ! $EXCLUDE_SECRETS && [ -d secrets ]; then
-    ARGS+=(secrets)
-    DISPLAY+=(secrets)
+if ! $EXCLUDE_SECRETS && [ -d bastiao/secrets ]; then
+    ARGS+=(bastiao/secrets)
+    DISPLAY+=(bastiao/secrets)
 fi
 
-# .env pode conter SUBOT_SSH_KEY_PASSPHRASE preenchida (opção prática, ver comentário no próprio
-# .env) — nunca vai pro mesmo backup que já carrega secrets/ssh/, senão o arquivo sozinho destrava
-# a chave sem precisar de mais nada. Empacota uma cópia redigida em vez do arquivo real.
-if [ -f .env ]; then
+# bastiao/.env pode conter SUBOT_SSH_KEY_PASSPHRASE preenchida (opção prática, ver comentário no
+# próprio .env) — nunca vai pro mesmo backup que já carrega bastiao/secrets/ssh/, senão o arquivo
+# sozinho destrava a chave sem precisar de mais nada. Empacota uma cópia redigida em vez do
+# arquivo real.
+if [ -f bastiao/.env ]; then
     TMPDIR="$(mktemp -d)"
     trap 'rm -rf "$TMPDIR"' EXIT
-    sed 's/^SUBOT_SSH_KEY_PASSPHRASE=.*/SUBOT_SSH_KEY_PASSPHRASE=__REDACTED_NAO_INCLUIDO_NO_BACKUP__/' .env > "$TMPDIR/.env"
-    ARGS+=(-C "$TMPDIR" .env)
-    DISPLAY+=(".env (com passphrase redigida)")
+    mkdir -p "$TMPDIR/bastiao"
+    sed 's/^SUBOT_SSH_KEY_PASSPHRASE=.*/SUBOT_SSH_KEY_PASSPHRASE=__REDACTED_NAO_INCLUIDO_NO_BACKUP__/' bastiao/.env > "$TMPDIR/bastiao/.env"
+    ARGS+=(-C "$TMPDIR" bastiao/.env)
+    DISPLAY+=("bastiao/.env (com passphrase redigida)")
 fi
 
 tar -czf "$OUT" "${ARGS[@]}"

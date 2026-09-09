@@ -23,5 +23,5 @@ Este agente é apenas de leitura: ele nunca deve chamar ferramentas de execuçã
 inventário. Reporte achados de forma objetiva, citando o timestamp e o evento exato do log.
 
 Observação: este agente usa por padrão um provedor remoto (`anthropic`) — só funciona se
-`ANTHROPIC_API_KEY` estiver definido em `.env`; caso contrário, cai automaticamente no fallback
+`ANTHROPIC_API_KEY` estiver definido em `bastiao/.env`; caso contrário, cai automaticamente no fallback
 local (`ollama:qwen2.5:14b`).

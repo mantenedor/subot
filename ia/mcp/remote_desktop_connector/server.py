@@ -36,8 +36,8 @@ def open_desktop_session(
     Para host com protocolo 'ssh', informe ssh_username (obrigatório) e ssh_password OU
     ssh_private_key (conteúdo da chave privada, formato OpenSSH — preferível a senha; é assim que
     o "console da IA" é montado: host 'subot-console' apontando pro serviço 'agent' na rede
-    docker, porta 2222, usuário 'subot', com a chave privada de secrets/ssh/guac_console_ed25519,
-    gerada por scripts/setup.sh). ssh_command é opcional, substitui o shell padrão por um comando
+    docker, porta 2222, usuário 'subot', com a chave privada de bastiao/secrets/ssh/guac_console_ed25519,
+    gerada por bastiao/scripts/setup.sh). ssh_command é opcional, substitui o shell padrão por um comando
     específico ao conectar (não é necessário pro console da IA — a sessão já cai direto num shell
     dentro do container 'agent', sem precisar de 'docker exec').
 

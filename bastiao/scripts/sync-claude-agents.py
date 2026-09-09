@@ -18,7 +18,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 SRC = ROOT / "ia" / "agents"
 DST = ROOT / ".claude" / "agents"
 SKILLS_SRC = ROOT / "ia" / "skills"
@@ -61,7 +61,7 @@ def project(path: Path) -> str:
     mcp_tools = ", ".join(f"mcp__{t}__*" for t in tools)
 
     header = (
-        f"<!-- gerado por scripts/sync-claude-agents.py a partir de ia/agents/{path.name}; não edite "
+        f"<!-- gerado por bastiao/scripts/sync-claude-agents.py a partir de ia/agents/{path.name}; não edite "
         f"diretamente. Origem multi-IA: provider={fm.get('provider', '?')} model={fm.get('model', '?')} -->\n"
         f"Ferramentas MCP equivalentes: {mcp_tools}\n\n"
     )

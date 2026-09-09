@@ -5,16 +5,16 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-mkdir -p data/guac-db data/guac-recordings data/audit data/agent-home data/ollama-models data/security-findings
+mkdir -p ../data/guac-db ../data/guac-recordings ../data/audit ../data/agent-home ../data/ollama-models ../data/security-findings
 mkdir -p secrets/ssh
 mkdir -p containers/guacamole/initdb
-mkdir -p backups
+mkdir -p ../backups
 
 # O container 'agent' roda como UID 1000 (usuário 'subot') — diretórios que ele precisa escrever
 # (home, modelos do Ollama, auditoria, achados de varredura de vulnerabilidade) precisam pertencer
 # a esse UID quando criados pela primeira vez como root no host, senão a montagem bind fica de
 # fato somente-leitura pra esse usuário.
-chown -R 1000:1000 data/agent-home data/ollama-models data/audit data/security-findings 2>/dev/null || true
+chown -R 1000:1000 ../data/agent-home ../data/ollama-models ../data/audit ../data/security-findings 2>/dev/null || true
 
 if [ ! -f .env ]; then
     echo "==> criando .env a partir de .env.example"
@@ -30,9 +30,9 @@ else
     echo "==> .env já existe, mantendo como está"
 fi
 
-if [ ! -f config/hosts.yaml ]; then
+if [ ! -f ../config/hosts.yaml ]; then
     echo "==> criando config/hosts.yaml a partir do template (config/hosts.yaml.example)"
-    cp config/hosts.yaml.example config/hosts.yaml
+    cp ../config/hosts.yaml.example ../config/hosts.yaml
 else
     echo "==> config/hosts.yaml já existe, mantendo como está"
 fi
@@ -68,15 +68,15 @@ else
     echo "==> par de chaves SSH do bastião já existe, mantendo como está"
 fi
 
-if [ ! -f ia/policy/managed-identity.json ]; then
+if [ ! -f ../ia/policy/managed-identity.json ]; then
     echo "==> criando ia/policy/managed-identity.json a partir do template (injetando ${KEY}.pub)"
     python3 -c '
 import json, sys
-with open("ia/policy/managed-identity.json.example", encoding="utf-8") as f:
+with open("../ia/policy/managed-identity.json.example", encoding="utf-8") as f:
     data = json.load(f)
 with open(sys.argv[1], encoding="utf-8") as f:
     data["ssh_authorized_key"] = f.read().strip()
-with open("ia/policy/managed-identity.json", "w", encoding="utf-8") as f:
+with open("../ia/policy/managed-identity.json", "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
     f.write("\n")
 ' "${KEY}.pub"
@@ -85,7 +85,6 @@ with open("ia/policy/managed-identity.json", "w", encoding="utf-8") as f:
 else
     echo "==> ia/policy/managed-identity.json já existe, mantendo como está"
 fi
-mkdir -p config/policy/hosts
 
 touch secrets/ssh/known_hosts
 

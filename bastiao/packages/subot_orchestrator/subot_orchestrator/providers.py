@@ -1,6 +1,6 @@
-"""Registro de provedores de IA (config/providers.yaml) — resolve provider+model de um agente
-para um alvo de chamada do LiteLLM. 'ollama' é local e não exige chave; provedores remotos só
-ficam disponíveis quando a variável de ambiente correspondente está preenchida em .env."""
+"""Registro de provedores de IA (bastiao/config/providers.yaml) — resolve provider+model de um
+agente para um alvo de chamada do LiteLLM. 'ollama' é local e não exige chave; provedores remotos
+só ficam disponíveis quando a variável de ambiente correspondente está preenchida em .env."""
 from __future__ import annotations
 
 import os
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import yaml
 
-PROVIDERS_PATH = Path(os.environ.get("SUBOT_PROVIDERS_FILE", "/opt/subot/config/providers.yaml"))
+PROVIDERS_PATH = Path(os.environ.get("SUBOT_PROVIDERS_FILE", "/opt/subot/bastiao/config/providers.yaml"))
 
 _ENV_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)(:-([^}]*))?\}")
 

@@ -36,9 +36,9 @@ backups/
 .env
 
 # credenciais reais do bot Telegram do gate de escalação de privilégio — o .example é que fica
-# versionado; o real é gerado por managed-host-gate/install-gate.sh no host gerenciado (ou
+# versionado; o real é gerado por gate/install-gate.sh no host gerenciado (ou
 # preparado aqui antes de transferir), nunca commitado
-managed-host-gate/etc/telegram.env
+gate/etc/telegram.env
 
 # python
 __pycache__/

@@ -107,7 +107,7 @@ Toda ação sobre um host gerenciado passa por `packages/subot_core`:
    executar; só roda de fato numa segunda chamada explícita com esse token. Para `ssh_exec`
    (execução de comando), esse token autosservível foi **substituído** por escalação real: um
    comando `sensitive`/`destructive` exige um `reason` humano-legível e tenta o atalho de sudoers
-   pré-promovido no host; se não estiver promovido, cai no `managed-host-gate` (aprovação humana
+   pré-promovido no host; se não estiver promovido, cai no `gate` (aprovação humana
    assíncrona via Telegram) — ver "Gate de escalação de privilégio" abaixo.
 3. **`audit.py`** grava todo evento (tentado ou executado) em `./data/audit/*.jsonl`,
    append-only.
@@ -154,7 +154,7 @@ VM como não confiável por padrão:
 - Revise `./data/audit/*.jsonl` e as gravações de sessão em `./data/guac-recordings` com
   regularidade (a skill `incident-review` ajuda nisso).
 
-### Gate de escalação de privilégio (`managed-host-gate/`)
+### Gate de escalação de privilégio (`gate/`)
 
 Substitui o modelo antigo de dois usuários (`subot` sem sudo / `subotsu` com sudo `NOPASSWD`).
 Cada host gerenciado tem só o usuário do manifesto de identidade (default `subot`), sem sudo nenhum
@@ -171,7 +171,7 @@ autorizada, e uma lista de padrões `sensitive_patterns` (de `allowlist.yaml`) j
 rodar via `sudo` direto, sem round-trip de Telegram. Só `sensitive` pode ser promovido —
 `destructive`/`blocked` nunca ganham esse atalho, nem em código (`SSHGateway._exec_privileged`
 só tenta `sudo -n -l` para `Risk.SENSITIVE`) nem na aplicação da política
-(`managed-host-gate/bin/apply-sudoers-policy.sh` recusa qualquer padrão que corresponda a
+(`gate/bin/apply-sudoers-policy.sh` recusa qualquer padrão que corresponda a
 `destructive_patterns`/`blocked_patterns`, e qualquer padrão `re:`-prefixado — sudoers não tem
 semântica de regex). **Aplicar essa política num host já provisionado é, ela mesma, uma escalação
 de privilégio** — reusa o mesmo Gate acima (sem protocolo novo): `subot identity sync --host <nome>`
@@ -202,7 +202,7 @@ gerenciado**, fora do container do agent, com o cliente (`subot-gate-request.sh`
 decidir sozinho.
 
 **Modelo de ameaça, segredo do Telegram e o que a permissão `0600` de `telegram.env` protege (e o
-que não protege)**: ver `managed-host-gate/etc/README.md`.
+que não protege)**: ver `gate/etc/README.md`.
 
 **Instalação:** ver [Instalando o gate de privilégio](#instalando-o-gate-de-privilégio-no-host-gerenciado)
 no Guia de operação abaixo.
@@ -270,7 +270,7 @@ subot/
 ├── config/{hosts.yaml.example,providers.yaml}   # hosts.yaml (real) é gerado, nunca versionado
 ├── secrets/ssh/                       # NUNCA versionado — dado de ambiente
 ├── data/                              # NUNCA versionado — todos os volumes, como diretórios do host
-├── managed-host-gate/                 # instalador + daemon do gate de privilégio, roda NO HOST GERENCIADO
+├── gate/                               # instalador + daemon do gate de privilégio, roda NO HOST GERENCIADO
 ├── install.sh                         # instalador de um comando (curl | bash) para VM nova
 └── scripts/                           # setup, pull-models, sync, backup, restore, rotação de chaves,
                                         # healthcheck
@@ -317,10 +317,10 @@ versionado no git) e nunca é commitado — é dado de ambiente, preservado só 
 Cada host gerenciado tem **um único usuário Linux** (definido em
 `ia/policy/managed-identity.json`, default `subot`), sem sudo nenhum a menos do que esteja
 explicitamente no manifesto de identidade. Qualquer comando `sensitive`/`destructive` não-promovido
-passa pelo gate (`managed-host-gate/`) — um daemon root separado que bloqueia esperando aprovação
+passa pelo gate (`gate/`) — um daemon root separado que bloqueia esperando aprovação
 humana assíncrona via Telegram antes de executar. Isso substitui o modelo antigo de dois usuários
 (`subot` sem sudo / `subotsu` com sudo `NOPASSWD`); racional completo na seção [Gate de escalação de
-privilégio](#gate-de-escalação-de-privilégio-managed-host-gate) acima.
+privilégio](#gate-de-escalação-de-privilégio-gate) acima.
 
 **1. Instalar o gate** — como root, **no host gerenciado** (nunca no bastião/container do agent):
 
@@ -328,7 +328,7 @@ privilégio](#gate-de-escalação-de-privilégio-managed-host-gate) acima.
 export SUBOT_IDENTITY_JSON_B64="$(base64 -w0 ia/policy/managed-identity.json)"   # do bastião
 # opcional, se já existir um complemento específico para este host:
 export SUBOT_HOST_IDENTITY_JSON_B64="$(base64 -w0 config/policy/hosts/<hostname>.json)"
-curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/managed-host-gate/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/gate/install.sh | sudo bash
 ```
 
 Isso cria o usuário do manifesto, grava a chave pública autorizada em `~<usuário>/.ssh/authorized_keys`,
@@ -337,7 +337,7 @@ uma pré-visualização e pede confirmação antes de gravar), e desativa qualqu
 remanescente do modelo antigo. É idempotente (pode rodar de novo sem duplicar nada) e narra/pede
 confirmação a cada passo que muda estado do host (`SUBOT_GATE_ASSUME_YES=1` para automação sem
 terminal). `SUBOT_BASTION_PUBKEY` (só a chave, formato antigo) continua aceito como fallback
-depreciado se `SUBOT_IDENTITY_JSON_B64` não vier. Ver `managed-host-gate/install-gate.sh` para o
+depreciado se `SUBOT_IDENTITY_JSON_B64` não vier. Ver `gate/install-gate.sh` para o
 passo a passo completo.
 
 **2. Sem acesso de console ao host** (só SSH) — para testar conectividade e transferir a chave
@@ -382,7 +382,7 @@ docker compose exec agent subot identity sync --host <nome>
 ```
 
 Isso mescla as duas listas, valida cada `pattern` contra `sensitive_patterns`, e dispara
-`managed-host-gate/bin/apply-sudoers-policy.sh` no host via o Gate — a notificação no Telegram
+`gate/bin/apply-sudoers-policy.sh` no host via o Gate — a notificação no Telegram
 mostra o conteúdo completo (já com os paths resolvidos) antes de alguém aprovar. Para ver o que já
 está de fato promovido num host (leitura, sem privilégio):
 
@@ -432,10 +432,10 @@ Cada agente roda no provider/model do seu próprio `ia/agents/*.md`, em paralelo
   interativo — a arquitetura já suporta isso via `subot_orchestrator`, mas nenhum foi integrado
   nesta primeira entrega.
 - GPU passthrough para o Ollama — ver nota de dimensionamento acima.
-- Validação automatizada do gate de escalação de privilégio (`managed-host-gate/`) contra um host
+- Validação automatizada do gate de escalação de privilégio (`gate/`) contra um host
   descartável — ainda não há um script/CI que suba um host de teste e rode
   `install-gate.sh`/`uninstall-gate.sh` de ponta a ponta; hoje é validação manual.
-  `managed-host-gate/tests/test-apply-sudoers-policy.sh` cobre só `apply-sudoers-policy.sh`
+  `gate/tests/test-apply-sudoers-policy.sh` cobre só `apply-sudoers-policy.sh`
   isoladamente (precisa de `jq`+`visudo`+root; roda manualmente, não em CI ainda).
 - Checagem em profundidade contra `destructive_patterns`/`blocked_patterns` na instalação
   inicial (`install.sh`/`install-gate.sh`): o payload de sudoers enviado nesse momento só leva

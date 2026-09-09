@@ -2,8 +2,8 @@
 
 Comandos `safe` rodam direto. Comandos `sensitive`/`destructive` exigem um `reason` humano-legível
 e passam por escalação de privilégio real: para `sensitive`, primeiro tenta o atalho de sudoers
-pré-promovido (ver managed-host-gate/bin/apply-sudoers-policy.sh); se não estiver promovido nesse
-host (ou for `destructive`, que nunca ganha o atalho), cai no fallback do managed-host-gate —
+pré-promovido (ver gate/bin/apply-sudoers-policy.sh); se não estiver promovido nesse
+host (ou for `destructive`, que nunca ganha o atalho), cai no fallback do gate —
 aprovação humana assíncrona via Telegram, em tempo real. Isso substitui o antigo `confirm_token`
 autosservível (a própria IA gerava e consumia — ver docs/ARCHITECTURE.md) por controles reais.
 `ssh_upload`/`ssh_download` continuam com `confirm_token` (`_gate`/`_transfer`) — é um risco
@@ -145,7 +145,7 @@ class SSHGateway:
         execução real, para nunca confundir "sudo negou" com "comando promovido falhou sozinho").
         DESTRUCTIVE nunca tenta sudo, mesmo que por engano esteja promovido no host — reforça em
         código a decisão de que destructive não ganha atalho. Em qualquer caso de fallback, cai no
-        managed-host-gate (aprovação humana assíncrona via Telegram) pela mesma conexão SSH."""
+        gate (aprovação humana assíncrona via Telegram) pela mesma conexão SSH."""
         try:
             client = self._connect(host)
         except Exception as exc:  # noqa: BLE001
@@ -186,7 +186,7 @@ class SSHGateway:
 
     def propose_sudoers_policy(self, host_name: str, payload_b64: str, *, reason: str,
                                actor: str) -> ExecResult:
-        """Aplica managed-host-gate/bin/apply-sudoers-policy.sh no host, via 'subot identity sync'
+        """Aplica gate/bin/apply-sudoers-policy.sh no host, via 'subot identity sync'
         (CLI do orquestrador). SEMPRE tratado como DESTRUCTIVE — nunca passa por policy.classify()
         nem pode ganhar o atalho de sudoers ele mesmo, mesmo que por engano um dia esteja
         'promovido' num manifesto (o payload muda a cada chamada, então nunca bateria com uma

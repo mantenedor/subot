@@ -57,8 +57,8 @@ TMP_SUDOERS="$(mktemp)"
 trap 'rm -f "$TMP_SUDOERS"' EXIT
 
 {
-    echo "# Gerenciado inteiramente por managed-host-gate/bin/apply-sudoers-policy.sh — NUNCA edite à mão."
-    echo "# Toda alteração passa pela instalação inicial (managed-host-gate/install-gate.sh) ou pelo"
+    echo "# Gerenciado inteiramente por gate/bin/apply-sudoers-policy.sh — NUNCA edite à mão."
+    echo "# Toda alteração passa pela instalação inicial (gate/install-gate.sh) ou pelo"
     echo "# Gate (aprovação humana via Telegram, 'subot identity sync'), com o conteúdo completo"
     echo "# revalidado por 'visudo -c' antes de ser ativado. Editar manualmente é sobrescrito na"
     echo "# próxima aplicação."

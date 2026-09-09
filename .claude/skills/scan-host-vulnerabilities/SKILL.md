@@ -35,4 +35,4 @@ atualiza nada sem confirmação/gate explícito à parte.
    primeiro — não apenas despeje o JSON bruto na conversa.
 6. Se um achado indicar necessidade de patch, **não aplique nada aqui** — recomende a ação (ex.:
    "rodar `dnf upgrade <pacote>` no host X, exige o gate de escalação de privilégio se o host tiver
-   `managed-host-gate` instalado") e deixe a execução para uma ação separada e confirmada.
+   `gate` instalado") e deixe a execução para uma ação separada e confirmada.

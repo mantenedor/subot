@@ -1,4 +1,4 @@
-# managed-host-gate/etc
+# gate/etc
 
 `telegram.env` (gerado a partir de `telegram.env.example` por `install-gate.sh`, nunca versionado)
 guarda `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` e `TELEGRAM_AUTHORIZED_IDS` — os únicos segredos

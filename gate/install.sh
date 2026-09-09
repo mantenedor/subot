@@ -3,7 +3,7 @@
 # (não no bastião):
 #
 #   export SUBOT_BASTION_PUBKEY="$(cat secrets/ssh/bastion_id_ed25519.pub)"   # no bastião, copie o valor
-#   curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/managed-host-gate/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/gate/install.sh | sudo bash
 #
 # Diferente do install.sh da raiz (que sobe uma stack Docker isolada e por isso é silencioso por
 # padrão), este mexe em contas reais do host — cria o usuário 'subot', grava a chave pública do
@@ -22,7 +22,7 @@ set -euo pipefail
 
 REPO_RAW_BASE="${SUBOT_REPO_RAW_BASE:-https://raw.githubusercontent.com/mantenedor/subot}"
 REPO_REF="${SUBOT_REPO_REF:-main}"
-BASE_URL="${REPO_RAW_BASE}/${REPO_REF}/managed-host-gate"
+BASE_URL="${REPO_RAW_BASE}/${REPO_REF}/gate"
 
 log() { printf '==> %s\n' "$1"; }
 

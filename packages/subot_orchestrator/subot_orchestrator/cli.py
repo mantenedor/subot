@@ -1,5 +1,5 @@
 """CLI `subot` — ponto de entrada agnóstico de IA para listar e rodar agentes, seja qual for o
-provedor (local ou remoto) declarado em cada agents/*.md."""
+provedor (local ou remoto) declarado em cada ia/agents/*.md."""
 from __future__ import annotations
 
 import asyncio
@@ -16,13 +16,13 @@ from .delegator import delegate
 from .runner import run_agent
 
 app = typer.Typer(help="subot: orquestrador multi-IA do bastião de infraestrutura")
-agent_app = typer.Typer(help="Inspeciona e roda agentes canônicos (agents/*.md)")
+agent_app = typer.Typer(help="Inspeciona e roda agentes canônicos (ia/agents/*.md)")
 identity_app = typer.Typer(help="Identidade (usuário/chave/sudoers) da IA nos hosts geridos")
 app.add_typer(agent_app, name="agent")
 app.add_typer(identity_app, name="identity")
 
 MANAGED_IDENTITY_PATH = Path(os.environ.get(
-    "SUBOT_MANAGED_IDENTITY_FILE", "/opt/subot/config/policy/managed-identity.json"))
+    "SUBOT_MANAGED_IDENTITY_FILE", "/opt/subot/ia/policy/managed-identity.json"))
 HOST_IDENTITY_DIR = Path(os.environ.get(
     "SUBOT_HOST_IDENTITY_DIR", "/opt/subot/config/policy/hosts"))
 
@@ -41,7 +41,7 @@ def _load_identity_json(path: Path) -> dict:
 def agent_list() -> None:
     specs = load_all()
     if not specs:
-        typer.echo("nenhum agente encontrado em agents/*.md")
+        typer.echo("nenhum agente encontrado em ia/agents/*.md")
         raise typer.Exit(1)
     for spec in specs.values():
         tools = ",".join(spec.tools)
@@ -72,7 +72,7 @@ def delegate_cmd(
 def identity_sync(
     host: str = typer.Option(..., "--host", help="nome do host no inventário (config/hosts.yaml)"),
 ) -> None:
-    """Mescla config/policy/managed-identity.json (padrão) + config/policy/hosts/<host>.json
+    """Mescla ia/policy/managed-identity.json (padrão) + config/policy/hosts/<host>.json
     (complemento, se existir) e aplica o sudoers resultante nesse host — sempre via Gate
     (aprovação humana assíncrona, mesmo em hosts já provisionados). v1: um host por vez."""
     inventory = Inventory()

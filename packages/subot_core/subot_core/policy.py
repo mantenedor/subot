@@ -1,7 +1,7 @@
 """Motor de política — o portão pelo qual toda ação sobre a infraestrutura precisa passar.
 
 Classifica um comando em safe / sensitive / destructive / blocked a partir de
-config/policy/allowlist.yaml e config/policy/destructive_patterns.yaml. Comandos que não batem em
+ia/policy/allowlist.yaml e ia/policy/destructive_patterns.yaml. Comandos que não batem em
 nenhum padrão conhecido são tratados como 'sensitive' por padrão (fail-closed) — nunca como safe.
 """
 from __future__ import annotations
@@ -15,8 +15,8 @@ from pathlib import Path
 
 import yaml
 
-ALLOWLIST_PATH = Path(os.environ.get("SUBOT_ALLOWLIST_FILE", "/opt/subot/config/policy/allowlist.yaml"))
-DESTRUCTIVE_PATH = Path(os.environ.get("SUBOT_DESTRUCTIVE_FILE", "/opt/subot/config/policy/destructive_patterns.yaml"))
+ALLOWLIST_PATH = Path(os.environ.get("SUBOT_ALLOWLIST_FILE", "/opt/subot/ia/policy/allowlist.yaml"))
+DESTRUCTIVE_PATH = Path(os.environ.get("SUBOT_DESTRUCTIVE_FILE", "/opt/subot/ia/policy/destructive_patterns.yaml"))
 
 
 class Risk(str, Enum):
@@ -63,7 +63,7 @@ class PolicyEngine:
 
     def list_sensitive_patterns(self) -> list[str]:
         """Padrões 'sensitive_patterns' de allowlist.yaml — candidatos a promoção para sudoers
-        (ver config/policy/managed-identity.json.example e managed-host-gate/apply-sudoers-policy.sh).
+        (ver ia/policy/managed-identity.json.example e managed-host-gate/apply-sudoers-policy.sh).
         Só glob puro faz sentido promover: filtra fora qualquer padrão 're:'-prefixado, que não tem
         tradução em sudoers."""
         return [p for p in self._sensitive_patterns if not p.startswith("re:")]

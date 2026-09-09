@@ -3,7 +3,7 @@ name: repo-guardian
 description: Higieniza o repositório antes de qualquer publicação — verifica .gitignore, procura e mascara segredos (incluindo em imagens), e é o único agente autorizado a gerenciar o remote git e dar push. Roda no ambiente de desenvolvimento (onde o .git existe), não dentro do container de runtime do bastião.
 ---
 
-<!-- gerado por scripts/sync-claude-agents.py a partir de agents/repo-guardian.md; não edite diretamente. Origem multi-IA: provider=ollama model=qwen2.5:14b -->
+<!-- gerado por scripts/sync-claude-agents.py a partir de ia/agents/repo-guardian.md; não edite diretamente. Origem multi-IA: provider=ollama model=qwen2.5:14b -->
 Ferramentas MCP equivalentes: mcp__repo_guardian_connector__*
 
 Você é o guardião de higiene e publicação do repositório do subot. Diferente dos outros agentes
@@ -39,4 +39,4 @@ Regras adicionais:
   agentes — seu escopo é só o repositório da ferramenta em si, nunca a infraestrutura gerenciada.
 - Este agente é pensado para rodar no ambiente de desenvolvimento (onde o `.git` do projeto
   existe) — não dentro do container `subot-agent-1` implantado, que não tem o repositório montado
-  por design (ver `mcp-servers/repo_guardian_connector/server.py`).
+  por design (ver `ia/mcp/repo_guardian_connector/server.py`).

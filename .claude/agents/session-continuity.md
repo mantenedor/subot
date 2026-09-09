@@ -3,7 +3,7 @@ name: session-continuity
 description: Grava um checkpoint do trabalho em andamento na memória persistente do subot antes de um restart do container 'agent' — necessário porque a sessão interativa do Claude Code roda dentro desse mesmo container, e reinícios (ex.: para recarregar .env) derrubam a sessão. Rode sempre que uma tarefa em andamento exigir reiniciar o container 'agent'.
 ---
 
-<!-- gerado por scripts/sync-claude-agents.py a partir de agents/session-continuity.md; não edite diretamente. Origem multi-IA: provider=ollama model=qwen2.5:7b -->
+<!-- gerado por scripts/sync-claude-agents.py a partir de ia/agents/session-continuity.md; não edite diretamente. Origem multi-IA: provider=ollama model=qwen2.5:7b -->
 Ferramentas MCP equivalentes: 
 
 Seu único trabalho é escrever um checkpoint de retomada em

@@ -11,10 +11,11 @@ fica fora do git (veja `.gitignore`) e é preservado só via `scripts/backup.sh`
 
 | No repositório (git) | Só no ambiente (backup, nunca git) |
 |---|---|
-| `docker-compose.yml`, `containers/`, `packages/`, `mcp-servers/`, `agents/*.md`, `.claude/`, `scripts/`, `install.sh` | `.env` (senhas) |
+| `docker-compose.yml`, `containers/`, `packages/`, `scripts/`, `install.sh` | `.env` (senhas) |
+| `ia/agents/*.md`, `ia/mcp/`, `ia/skills/`, `.claude/` (espelho gerado de `ia/agents` e `ia/skills`) | |
 | `config/hosts.yaml.example` (template) | `config/hosts.yaml` (inventário real de hosts) |
-| `config/providers.yaml`, `config/policy/*.yaml` (defaults genéricos) | `secrets/` (chaves SSH) |
-| `config/policy/managed-identity.json.example` (template) | `config/policy/managed-identity.json` + `config/policy/hosts/*.json` (identidade/sudoers real da IA em cada host) |
+| `config/providers.yaml`, `ia/policy/*.yaml` (defaults genéricos) | `secrets/` (chaves SSH) |
+| `ia/policy/managed-identity.json.example` (template) | `ia/policy/managed-identity.json` + `config/policy/hosts/*.json` (identidade/sudoers real da IA em cada host) |
 | | `data/` (bancos, gravações de sessão, log de auditoria, modelos do Ollama) |
 
 Isso torna o disaster-recovery em duas partes independentes e óbvias: `git clone` (ou
@@ -24,7 +25,7 @@ insumos de uma instância específica por cima dela.
 ## Princípio central: multi-IA, local-first
 
 O Claude Code é o **ponto de partida**, não uma dependência obrigatória. Todo agente do subot é
-definido uma única vez em `agents/*.md`, com um front matter que declara **qual IA o executa**:
+definido uma única vez em `ia/agents/*.md`, com um front matter que declara **qual IA o executa**:
 
 ```yaml
 ---
@@ -45,7 +46,7 @@ Esse mesmo arquivo é consumido de duas formas:
   paralela**: um agente coordenador pode disparar vários outros — cada um em um provedor/modelo
   diferente — simultaneamente (`subot delegate`).
 - **Pelo Claude Code**, para uso interativo. `scripts/sync-claude-agents.py` projeta
-  `agents/*.md` para `.claude/agents/*.md` no formato que o Claude Code entende (o Claude Code
+  `ia/agents/*.md` para `.claude/agents/*.md` no formato que o Claude Code entende (o Claude Code
   sempre roda no seu próprio modelo; os campos `provider`/`model`/`fallback` só importam para o
   orquestrador).
 
@@ -99,7 +100,7 @@ nome completo (`subot-agent-1`), `docker compose exec` aceita o nome curto do se
 Toda ação sobre um host gerenciado passa por `packages/subot_core`:
 
 1. **`policy.py`** classifica cada comando como `safe` / `sensitive` / `destructive` / `blocked`
-   a partir de `config/policy/allowlist.yaml` e `destructive_patterns.yaml`. Comando desconhecido
+   a partir de `ia/policy/allowlist.yaml` e `destructive_patterns.yaml`. Comando desconhecido
    nunca é `safe` por padrão (fail-closed) — vira `sensitive`.
 2. **`confirm.py`** implementa confirmação em duas etapas ("break-glass") — hoje só para
    `ssh_upload`/`ssh_download`: uma transferência retorna um `confirm_token` de uso único em vez de
@@ -164,7 +165,7 @@ assíncrona via Telegram antes de executar qualquer coisa.
 
 **Atalho de sudoers pré-promovido:** nenhum comando roda sem que um humano tenha autorizado em
 algum momento — mas essa autorização pode ter acontecido **antes**, na promoção, em vez de em
-tempo real a cada execução. `config/policy/managed-identity.json` (padrão, aplicado a todo host) +
+tempo real a cada execução. `ia/policy/managed-identity.json` (padrão, aplicado a todo host) +
 `config/policy/hosts/<hostname>.json` (complemento por-host) descrevem o usuário, a chave SSH
 autorizada, e uma lista de padrões `sensitive_patterns` (de `allowlist.yaml`) já aprovados para
 rodar via `sudo` direto, sem round-trip de Telegram. Só `sensitive` pode ser promovido —
@@ -182,7 +183,7 @@ uso em "Promovendo comandos para sudoers", no Guia de operação abaixo.
 `subot identity sync` (que tem acesso ao `PolicyEngine` do bastião). Na instalação inicial
 (`install-gate.sh`), o payload só leva `username`+`sudoers` — a única defesa nesse momento é o
 `--dry-run` mostrado antes do `confirm()` interativo (um humano de verdade lendo o resultado antes
-de digitar "sim"). Editar `config/policy/managed-identity.json` para incluir por engano um padrão
+de digitar "sim"). Editar `ia/policy/managed-identity.json` para incluir por engano um padrão
 destrutivo na lista `sudoers` não é pego automaticamente até a instalação; revise o `--dry-run` com
 atenção nesse passo.
 
@@ -229,7 +230,7 @@ Como cheguei nesses números:
   vCPU só para codificar vídeo.
 - **Ollama (CPU-only)** é o item que mais pesa: com os defaults já ajustados neste projeto para
   CPU (`qwen2.5:14b` no `infra-operator`, `qwen2.5:7b` no `stack-maintainer` — ver
-  `config/providers.yaml` e `agents/*.md`), cada modelo carregado ocupa ~10–12 GB (14b) ou ~5–6 GB
+  `config/providers.yaml` e `ia/agents/*.md`), cada modelo carregado ocupa ~10–12 GB (14b) ou ~5–6 GB
   (7b) de RAM residente; em uma delegação (`subot delegate`) ambos podem ficar carregados ao mesmo
   tempo, ~16–18 GB. Para throughput razoável (poucos tokens/s a alguns tokens/s) recomenda-se pelo
   menos 8 núcleos físicos dedicados e boa banda de memória (DDR4-3200 dual-channel ou melhor).
@@ -260,10 +261,13 @@ subot/
 ├── packages/
 │   ├── subot_core/                    # segurança: inventory, policy, confirm, audit, ssh, secrets, guac_client
 │   └── subot_orchestrator/            # multi-IA: providers, agent_loader, mcp_client, runner, delegator, cli
-├── mcp-servers/{ssh,remote_desktop,inventory,audit}_connector/
-├── agents/                            # definições canônicas de agente (multi-IA)
-├── .claude/{settings.json,agents,skills}/   # projeção Claude Code + skills
-├── config/{hosts.yaml.example,providers.yaml,policy/}   # hosts.yaml (real) é gerado, nunca versionado
+├── ia/
+│   ├── agents/                        # definições canônicas de agente (multi-IA) — fonte de .claude/agents/
+│   ├── mcp/{ssh,remote_desktop,inventory,audit,repo_guardian}_connector/
+│   ├── skills/                        # fonte de .claude/skills/ (projetado por scripts/sync-claude-agents.py)
+│   └── policy/{allowlist.yaml,destructive_patterns.yaml,managed-identity.json.example}
+├── .claude/{settings.json,agents,skills}/   # projeção Claude Code, 100% gerada a partir de ia/
+├── config/{hosts.yaml.example,providers.yaml}   # hosts.yaml (real) é gerado, nunca versionado
 ├── secrets/ssh/                       # NUNCA versionado — dado de ambiente
 ├── data/                              # NUNCA versionado — todos os volumes, como diretórios do host
 ├── managed-host-gate/                 # instalador + daemon do gate de privilégio, roda NO HOST GERENCIADO
@@ -282,7 +286,7 @@ export SUBOT_SSH_KEY_PASSPHRASE='a-passphrase-que-o-setup.sh-mostrou'
 docker compose up -d
 bash scripts/register-console.sh   # cria a conexão "subot-console" no Guacamole
 bash scripts/pull-models.sh    # baixa os modelos locais default no Ollama (qwen2.5:14b e 7b)
-python3 scripts/sync-claude-agents.py   # projeta agents/*.md -> .claude/agents/*.md
+python3 scripts/sync-claude-agents.py   # projeta ia/agents/*.md -> .claude/agents/*.md (e ia/skills/ -> .claude/skills/)
 ```
 
 - API REST: não publicada — só de dentro da rede `subot_net` ou via `docker compose exec agent`.
@@ -311,7 +315,7 @@ versionado no git) e nunca é commitado — é dado de ambiente, preservado só 
 ### Instalando o gate de privilégio no host gerenciado
 
 Cada host gerenciado tem **um único usuário Linux** (definido em
-`config/policy/managed-identity.json`, default `subot`), sem sudo nenhum a menos do que esteja
+`ia/policy/managed-identity.json`, default `subot`), sem sudo nenhum a menos do que esteja
 explicitamente no manifesto de identidade. Qualquer comando `sensitive`/`destructive` não-promovido
 passa pelo gate (`managed-host-gate/`) — um daemon root separado que bloqueia esperando aprovação
 humana assíncrona via Telegram antes de executar. Isso substitui o modelo antigo de dois usuários
@@ -321,7 +325,7 @@ privilégio](#gate-de-escalação-de-privilégio-managed-host-gate) acima.
 **1. Instalar o gate** — como root, **no host gerenciado** (nunca no bastião/container do agent):
 
 ```bash
-export SUBOT_IDENTITY_JSON_B64="$(base64 -w0 config/policy/managed-identity.json)"   # do bastião
+export SUBOT_IDENTITY_JSON_B64="$(base64 -w0 ia/policy/managed-identity.json)"   # do bastião
 # opcional, se já existir um complemento específico para este host:
 export SUBOT_HOST_IDENTITY_JSON_B64="$(base64 -w0 config/policy/hosts/<hostname>.json)"
 curl -fsSL https://raw.githubusercontent.com/mantenedor/subot/main/managed-host-gate/install.sh | sudo bash
@@ -362,11 +366,11 @@ de identidade (default `subot`) — veja "Adicionando um host gerenciado" acima.
 Depois que o gate está instalado num host, dois arquivos controlam o que roda via `sudo` direto
 (sem esperar aprovação humana em tempo real) nesse host:
 
-- `config/policy/managed-identity.json` — `sudoers` aqui é a lista **padrão, aplicada a todo host**.
+- `ia/policy/managed-identity.json` — `sudoers` aqui é a lista **padrão, aplicada a todo host**.
 - `config/policy/hosts/<hostname>.json` (opcional) — `sudoers` aqui **complementa** (nunca
   substitui) a lista padrão, só para esse host. Formato: `{"sudoers": [{"pattern": "..."}]}`.
 
-Cada `pattern` precisa já existir em `sensitive_patterns` de `config/policy/allowlist.yaml` (não
+Cada `pattern` precisa já existir em `sensitive_patterns` de `ia/policy/allowlist.yaml` (não
 dá pra promover algo que a política ainda não reconhece como `sensitive`) e não pode ter prefixo
 `re:` (sudoers não tem semântica de regex — só glob puro, ex. `"docker compose restart*"`).
 
@@ -388,7 +392,7 @@ docker compose exec agent subot identity show <nome>
 
 ### Adicionando ou trocando a IA de um agente
 
-Edite (ou crie) um arquivo em `agents/*.md`. Campos obrigatórios: `name`, `description`,
+Edite (ou crie) um arquivo em `ia/agents/*.md`. Campos obrigatórios: `name`, `description`,
 `provider` (um id de `config/providers.yaml`), `model`. Opcionais: `tools`, `fallback`,
 `temperature`. Depois de editar, rode `python3 scripts/sync-claude-agents.py` para atualizar a
 projeção em `.claude/agents/`.
@@ -406,7 +410,7 @@ docker compose exec agent subot delegate \
     "security-auditor=revise o log de auditoria das últimas 24h"
 ```
 
-Cada agente roda no provider/model do seu próprio `agents/*.md`, em paralelo.
+Cada agente roda no provider/model do seu próprio `ia/agents/*.md`, em paralelo.
 
 ## Fora de escopo (próximos passos)
 
@@ -433,3 +437,11 @@ Cada agente roda no provider/model do seu próprio `agents/*.md`, em paralelo.
   `install-gate.sh`/`uninstall-gate.sh` de ponta a ponta; hoje é validação manual.
   `managed-host-gate/tests/test-apply-sudoers-policy.sh` cobre só `apply-sudoers-policy.sh`
   isoladamente (precisa de `jq`+`visudo`+root; roda manualmente, não em CI ainda).
+- Checagem em profundidade contra `destructive_patterns`/`blocked_patterns` na instalação
+  inicial (`install.sh`/`install-gate.sh`): o payload de sudoers enviado nesse momento só leva
+  `username`+`sudoers` (ver `install-gate.sh`, passo 7), sem essas duas listas — a única defesa
+  aí é revisar o `--dry-run` e digitar "sim" a mais confirmações. A checagem dupla completa só
+  existe hoje em atualizações via `subot identity sync` (que tem acesso ao `PolicyEngine` do
+  bastião). Fechar esse gap exigiria o instalador também ter acesso ao `PolicyEngine` (hoje só
+  roda no host gerenciado, sem o pacote Python do bastião) ou buscar essas listas do bastião no
+  momento da instalação.

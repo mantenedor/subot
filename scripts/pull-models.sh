@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Baixa os modelos locais default (usados pelos agentes canônicos em ./agents/*.md) no Ollama,
+# Baixa os modelos locais default (usados pelos agentes canônicos em ./ia/agents/*.md) no Ollama,
 # que roda dentro do container 'agent', para que os agentes funcionem 100% offline logo após
 # 'docker compose up'.
 set -euo pipefail

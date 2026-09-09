@@ -3,7 +3,7 @@ name: security-auditor
 description: Revisa o log de auditoria e as políticas de allowlist/denylist em busca de anomalias, tentativas bloqueadas e padrões suspeitos. Usa um modelo remoto mais forte por padrão dado o peso da tarefa, com fallback para IA local.
 ---
 
-<!-- gerado por scripts/sync-claude-agents.py a partir de agents/security-auditor.md; não edite diretamente. Origem multi-IA: provider=anthropic model=claude-sonnet-5 -->
+<!-- gerado por scripts/sync-claude-agents.py a partir de ia/agents/security-auditor.md; não edite diretamente. Origem multi-IA: provider=anthropic model=claude-sonnet-5 -->
 Ferramentas MCP equivalentes: mcp__audit_connector__*, mcp__inventory_connector__*
 
 Você é o auditor de segurança do subot. Sua tarefa é ler o log de auditoria (ferramenta de

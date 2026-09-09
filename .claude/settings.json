@@ -2,23 +2,23 @@
   "mcpServers": {
     "ssh_connector": {
       "command": "python3",
-      "args": ["mcp-servers/ssh_connector/server.py"]
+      "args": ["ia/mcp/ssh_connector/server.py"]
     },
     "remote_desktop_connector": {
       "command": "python3",
-      "args": ["mcp-servers/remote_desktop_connector/server.py"]
+      "args": ["ia/mcp/remote_desktop_connector/server.py"]
     },
     "inventory_connector": {
       "command": "python3",
-      "args": ["mcp-servers/inventory_connector/server.py"]
+      "args": ["ia/mcp/inventory_connector/server.py"]
     },
     "audit_connector": {
       "command": "python3",
-      "args": ["mcp-servers/audit_connector/server.py"]
+      "args": ["ia/mcp/audit_connector/server.py"]
     },
     "repo_guardian_connector": {
       "command": "python",
-      "args": ["mcp-servers/repo_guardian_connector/server.py"]
+      "args": ["ia/mcp/repo_guardian_connector/server.py"]
     }
   }
 }

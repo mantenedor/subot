@@ -1,7 +1,7 @@
 {
   "_comment": [
     "TEMPLATE - este arquivo e rastreado no git (e a 'abstracao da ferramenta'). O arquivo real,",
-    "config/policy/managed-identity.json, e gerado a partir deste por scripts/setup.sh na primeira",
+    "ia/policy/managed-identity.json, e gerado a partir deste por scripts/setup.sh na primeira",
     "execucao e NUNCA e commitado (esta em .gitignore) - e dado de ambiente, mesma categoria de",
     "config/hosts.yaml (ver docs/ARCHITECTURE.md, 'Repositorio vs. dados de ambiente').",
     "",

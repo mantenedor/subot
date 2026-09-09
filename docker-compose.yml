@@ -4,8 +4,8 @@ name: subot
 # MCP servers, tudo num container só — ver README pro raciocínio da consolidação).
 x-subot-env: &subot-env
   SUBOT_HOSTS_FILE: /opt/subot/config/hosts.yaml
-  SUBOT_ALLOWLIST_FILE: /opt/subot/config/policy/allowlist.yaml
-  SUBOT_DESTRUCTIVE_FILE: /opt/subot/config/policy/destructive_patterns.yaml
+  SUBOT_ALLOWLIST_FILE: /opt/subot/ia/policy/allowlist.yaml
+  SUBOT_DESTRUCTIVE_FILE: /opt/subot/ia/policy/destructive_patterns.yaml
   SUBOT_SSH_DIR: /opt/subot/secrets/ssh
   # Passphrase da chave privada do bastião. Fallback só: secrets.key_passphrase() lê o valor
   # atual direto de /opt/subot/.env (montado abaixo) a cada conexão SSH; esta variável de ambiente
@@ -17,9 +17,9 @@ x-subot-env: &subot-env
   SUBOT_CONFIRM_STORE: /opt/subot/data/audit/.confirm_tokens.json
   SUBOT_CONFIRM_TOKEN_TTL_SECONDS: ${SUBOT_CONFIRM_TOKEN_TTL_SECONDS:-300}
   SUBOT_STRICT_KEY_PERMS: ${SUBOT_STRICT_KEY_PERMS:-false}
-  SUBOT_AGENTS_DIR: /opt/subot/agents
+  SUBOT_AGENTS_DIR: /opt/subot/ia/agents
   SUBOT_PROVIDERS_FILE: /opt/subot/config/providers.yaml
-  SUBOT_MCP_SERVERS_DIR: /opt/subot/mcp-servers
+  SUBOT_MCP_SERVERS_DIR: /opt/subot/ia/mcp
   GUACAMOLE_BASE_URL: http://guacamole:8080/guacamole
   GUACAMOLE_ADMIN_USER: ${GUACAMOLE_ADMIN_USER:-guacadmin}
   GUACAMOLE_ADMIN_PASSWORD: ${GUACAMOLE_ADMIN_PASSWORD:-guacadmin}
@@ -102,9 +102,10 @@ services:
     environment: *subot-env
     volumes:
       - ./config:/opt/subot/config
-      - ./agents:/opt/subot/agents
+      - ./ia/agents:/opt/subot/ia/agents
+      - ./ia/mcp:/opt/subot/ia/mcp:ro
+      - ./ia/policy:/opt/subot/ia/policy
       - ./.claude:/opt/subot/.claude
-      - ./mcp-servers:/opt/subot/mcp-servers:ro
       - ./packages:/opt/subot/packages:ro
       - ./secrets/ssh:/opt/subot/secrets/ssh
       # só leitura: usado por secrets.key_passphrase() pra ler SUBOT_SSH_KEY_PASSPHRASE direto do

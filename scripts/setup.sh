@@ -68,22 +68,22 @@ else
     echo "==> par de chaves SSH do bastião já existe, mantendo como está"
 fi
 
-if [ ! -f config/policy/managed-identity.json ]; then
-    echo "==> criando config/policy/managed-identity.json a partir do template (injetando ${KEY}.pub)"
+if [ ! -f ia/policy/managed-identity.json ]; then
+    echo "==> criando ia/policy/managed-identity.json a partir do template (injetando ${KEY}.pub)"
     python3 -c '
 import json, sys
-with open("config/policy/managed-identity.json.example", encoding="utf-8") as f:
+with open("ia/policy/managed-identity.json.example", encoding="utf-8") as f:
     data = json.load(f)
 with open(sys.argv[1], encoding="utf-8") as f:
     data["ssh_authorized_key"] = f.read().strip()
-with open("config/policy/managed-identity.json", "w", encoding="utf-8") as f:
+with open("ia/policy/managed-identity.json", "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
     f.write("\n")
 ' "${KEY}.pub"
-    echo "    lista 'sudoers' padrão copiada do template — edite config/policy/managed-identity.json"
+    echo "    lista 'sudoers' padrão copiada do template — edite ia/policy/managed-identity.json"
     echo "    depois para promover/remover comandos (efetivo só após 'subot identity sync --host <nome>')."
 else
-    echo "==> config/policy/managed-identity.json já existe, mantendo como está"
+    echo "==> ia/policy/managed-identity.json já existe, mantendo como está"
 fi
 mkdir -p config/policy/hosts
 
@@ -99,7 +99,7 @@ if [ ! -f "$CONSOLE_KEY" ]; then
     ssh-keygen -t ed25519 -f "$CONSOLE_KEY" -N "" -C "subot-guac-console"
     chmod 600 "$CONSOLE_KEY"
     chmod 644 "${CONSOLE_KEY}.pub"
-    echo "    chave pronta — use mcp-servers/remote_desktop_connector para criar a conexão no"
+    echo "    chave pronta — use ia/mcp/remote_desktop_connector para criar a conexão no"
     echo "    Guacamole (host 'subot-console' -> agent:2222, ver config/hosts.yaml.example)"
 else
     echo "==> chave do console SSH já existe, mantendo como está"

@@ -1,4 +1,4 @@
-"""Carrega definições canônicas de agente a partir de agents/*.md (front matter YAML + corpo
+"""Carrega definições canônicas de agente a partir de ia/agents/*.md (front matter YAML + corpo
 Markdown). Este é o formato fonte da verdade, multi-IA — tanto o subot_orchestrator quanto
 scripts/sync-claude-agents.py (projeção para .claude/agents/) partem daqui."""
 from __future__ import annotations
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-AGENTS_DIR = Path(os.environ.get("SUBOT_AGENTS_DIR", "/opt/subot/agents"))
+AGENTS_DIR = Path(os.environ.get("SUBOT_AGENTS_DIR", "/opt/subot/ia/agents"))
 
 
 @dataclass

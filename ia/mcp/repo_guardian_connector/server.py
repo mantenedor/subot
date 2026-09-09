@@ -7,7 +7,7 @@ atualizado no GitHub. Por isso é deliberadamente AUTO-CONTIDO — não importa 
 rodar dentro do container 'subot-agent-1' (que nem tem o .git montado). Basta:
 
     pip install mcp Pillow
-    python mcp-servers/repo_guardian_connector/server.py
+    python ia/mcp/repo_guardian_connector/server.py
 
 Estado próprio (log de auditoria + tokens de confirmação) fica em <raiz-do-repo>/.subot-guardian/,
 que é ignorado pelo git.

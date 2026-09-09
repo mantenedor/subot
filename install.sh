@@ -174,7 +174,7 @@ bash scripts/register-console.sh || echo "    falhou — rode 'bash scripts/regi
 log "baixando modelos locais do Ollama (pode demorar alguns minutos)"
 bash scripts/pull-models.sh || echo "    falhou — rode 'bash scripts/pull-models.sh' depois pra tentar de novo."
 
-log "projetando agents/*.md para o formato do Claude Code (.claude/agents/)"
+log "projetando ia/agents/*.md para o formato do Claude Code (.claude/agents/)"
 python3 scripts/sync-claude-agents.py
 
 log "checklist de saúde"

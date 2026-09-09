@@ -1,4 +1,4 @@
-"""Executa um agente canônico (agents/*.md) contra o provedor de IA configurado, dando a ele
+"""Executa um agente canônico (ia/agents/*.md) contra o provedor de IA configurado, dando a ele
 acesso às mesmas ferramentas MCP que o Claude Code usaria. Requer um modelo com suporte a
 tool-calling (ex.: qwen2.5/llama3.1 no Ollama, ou qualquer modelo remoto moderno) — ver README."""
 from __future__ import annotations
@@ -49,7 +49,7 @@ async def _tool_schemas(tool_servers: list[str]) -> tuple[list[dict], dict[str, 
 async def run_agent(name: str, task: str, *, actor: str = "orchestrator") -> RunResult:
     agents = load_all()
     if name not in agents:
-        raise KeyError(f"agente desconhecido '{name}' — confira agents/*.md")
+        raise KeyError(f"agente desconhecido '{name}' — confira ia/agents/*.md")
     spec = agents[name]
     registry = ProviderRegistry()
     tool_defs, tool_owner = await _tool_schemas(spec.tools)

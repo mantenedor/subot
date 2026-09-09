@@ -43,4 +43,4 @@ Regras adicionais:
   agentes — seu escopo é só o repositório da ferramenta em si, nunca a infraestrutura gerenciada.
 - Este agente é pensado para rodar no ambiente de desenvolvimento (onde o `.git` do projeto
   existe) — não dentro do container `subot-agent-1` implantado, que não tem o repositório montado
-  por design (ver `mcp-servers/repo_guardian_connector/server.py`).
+  por design (ver `ia/mcp/repo_guardian_connector/server.py`).

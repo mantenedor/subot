@@ -27,7 +27,7 @@ fi
 # Console SSH do agent, só pela rede docker interna (subot_net) — sem porta publicada no host,
 # autenticação só por chave (dropbear -s desliga login por senha). A chave pública vem de
 # secrets/ssh/guac_console_ed25519.pub (gerada por scripts/setup.sh); a privada correspondente é
-# o que o Guacamole usa pra abrir a sessão (ver mcp-servers/remote_desktop_connector).
+# o que o Guacamole usa pra abrir a sessão (ver ia/mcp/remote_desktop_connector).
 mkdir -p /home/subot/.ssh
 chmod 700 /home/subot/.ssh
 if [ -f "$SSH_DIR/guac_console_ed25519.pub" ]; then

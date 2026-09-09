@@ -10,7 +10,7 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-MCP_SERVERS_DIR = Path(os.environ.get("SUBOT_MCP_SERVERS_DIR", "/opt/subot/mcp-servers"))
+MCP_SERVERS_DIR = Path(os.environ.get("SUBOT_MCP_SERVERS_DIR", "/opt/subot/ia/mcp"))
 
 SERVER_ENTRYPOINTS = {
     "ssh_connector": "ssh_connector/server.py",

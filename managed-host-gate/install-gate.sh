@@ -6,8 +6,8 @@
 # local (bin/, etc/, systemd/ ao lado deste arquivo).
 #
 # Identidade (usuário, chave pública, sudoers pré-aprovado) vem de um manifesto JSON — ver
-# config/policy/managed-identity.json.example no repositório. Exporte SUBOT_IDENTITY_JSON_B64 com
-# o conteúdo (base64) de config/policy/managed-identity.json do bastião antes de rodar este script;
+# ia/policy/managed-identity.json.example no repositório. Exporte SUBOT_IDENTITY_JSON_B64 com
+# o conteúdo (base64) de ia/policy/managed-identity.json do bastião antes de rodar este script;
 # opcionalmente SUBOT_HOST_IDENTITY_JSON_B64 com o complemento específico deste host
 # (config/policy/hosts/<hostname>.json), se existir. SUBOT_BASTION_PUBKEY (só a chave, formato
 # antigo) continua aceito como fallback depreciado se SUBOT_IDENTITY_JSON_B64 não vier.
@@ -130,7 +130,7 @@ fi
 PUBKEY="$IDENTITY_PUBKEY"
 if [ -z "$PUBKEY" ] && [ -n "${SUBOT_BASTION_PUBKEY:-}" ]; then
     echo "==> usando SUBOT_BASTION_PUBKEY (formato antigo) — prefira SUBOT_IDENTITY_JSON_B64"
-    echo "    (ver config/policy/managed-identity.json.example no repositório)."
+    echo "    (ver ia/policy/managed-identity.json.example no repositório)."
     PUBKEY="$SUBOT_BASTION_PUBKEY"
 fi
 if [ -z "$PUBKEY" ] && have_tty; then

@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
 # Daemon root do gate de escalação de privilégio — o único processo que de fato executa um
 # comando privilegiado neste host, e só depois de um humano aprovar via Telegram. Roda como
-# serviço systemd (subot-gate.service), instância única garantida por 'flock' no ExecStart. Nunca
-# roda como 'subot' e não deve ter permissão de escrita para 'subot' (ver install-gate.sh).
+# serviço systemd (subot-gate.service), instância única garantida por flock mantido pelo PRÓPRIO
+# processo (ver abaixo) — não por um wrapper externo. Nunca roda como 'subot' e não deve ter
+# permissão de escrita para 'subot' (ver install-gate.sh).
 set -euo pipefail
+
+# Lock precisa ser deste processo, não de um 'flock <lockfile> <comando>' no ExecStart: com
+# KillMode=process (necessário pra execute_approved() sobreviver a um restart, ver unit systemd),
+# o systemd só rastreia/mata o processo que o ExecStart lançou diretamente — se fosse o wrapper
+# 'flock', o daemon de verdade ficaria órfão no restart AINDA segurando o lock (herdado por fork),
+# e a próxima instância nunca mais conseguiria adquiri-lo. Mantendo o lock no fd 9 deste próprio
+# processo, ele é liberado automaticamente quando ESTE processo termina (killed ou não).
+exec 9>/run/subot-gate.lock
+flock -n 9 || { echo "subot-gate-daemon: já existe uma instância rodando (lock /run/subot-gate.lock ocupado)." >&2; exit 1; }
 
 BASE=/opt/subot-gate
 # shellcheck source=/opt/subot-gate/etc/telegram.env
@@ -89,10 +99,13 @@ send_notification() {  # $1=request_id — pedido já está em PROC_DIR
     text+="motivo: $(html_escape "$reason")"$'\n'
     text+="<pre><code>$(html_escape "$cmd")</code></pre>"
 
+    # Prefixo 'gate:' namespaceia o callback_data — necessário porque o plano é o mesmo chat/bot
+    # também carregar comunicação geral com a IA por outro processo mais adiante; sem isso,
+    # qualquer coisa que reaproveite esse bot correria o risco de colidir com as ações do gate.
     kb='{"inline_keyboard":[['
-    kb+='{"text":"✅ Permitir","callback_data":"allow:'"$id"'"},'
-    kb+='{"text":"❌ Negar","callback_data":"deny:'"$id"'"},'
-    kb+='{"text":"⏸ Adiar","callback_data":"defer:'"$id"'"}'
+    kb+='{"text":"✅ Permitir","callback_data":"gate:allow:'"$id"'"},'
+    kb+='{"text":"❌ Negar","callback_data":"gate:deny:'"$id"'"},'
+    kb+='{"text":"⏸ Adiar","callback_data":"gate:defer:'"$id"'"}'
     kb+=']]}'
 
     # 'if resp=$(...)' em vez de 'resp=$(...)' solto: sob 'set -e', uma atribuição simples aborta
@@ -157,12 +170,28 @@ execute_approved() {  # $1=request_id $2=decided_by_id (numérico)
 
 handle_callback() {  # $1=update json (contém .callback_query)
     local upd="$1" from_id chat_id cq_id data action id
+
+    # Só processa callback_data no namespace do gate ('gate:<ação>:<id>') — qualquer coisa fora
+    # disso é ruído (ex.: uma feature futura de chat com a IA reaproveitando o mesmo bot/chat) e é
+    # ignorada em silêncio, sem responder, antes de checar autorização ou tocar em qualquer arquivo.
+    data="$(jq -r '.callback_query.data' <<<"$upd")"
+    case "$data" in
+        gate:*) data="${data#gate:}" ;;
+        *) return 0 ;;
+    esac
+    action="${data%%:*}"
+    id="${data#*:}"
+
+    # request_id é sempre 32 hex chars (16 bytes de /dev/urandom, ver subot-gate-request.sh) — só
+    # esse formato pode ter sido gerado por este gate, e é o único seguro pra interpolar em caminho
+    # de arquivo (STATE_DIR/PROC_DIR usam $id cru logo abaixo).
+    if ! [[ "$id" =~ ^[0-9a-f]{32}$ ]]; then
+        return 0
+    fi
+
     from_id="$(jq -r '.callback_query.from.id' <<<"$upd")"
     chat_id="$(jq -r '.callback_query.message.chat.id' <<<"$upd")"
     cq_id="$(jq -r '.callback_query.id' <<<"$upd")"
-    data="$(jq -r '.callback_query.data' <<<"$upd")"
-    action="${data%%:*}"
-    id="${data#*:}"
 
     if [ "$chat_id" != "$TELEGRAM_CHAT_ID" ] || ! grep -qw "$from_id" <<<"${TELEGRAM_AUTHORIZED_IDS//,/ }"; then
         answer_toast "$cq_id" "Não autorizado"

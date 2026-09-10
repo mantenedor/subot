@@ -5,11 +5,26 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# flock garante instância única (evita corrida no offset do getUpdates); o daemon roda como
-# root porque precisa poder executar qualquer comando aprovado, em qualquer parte do filesystem.
-ExecStart=/usr/bin/flock -n /run/subot-gate.lock /opt/subot-gate/bin/subot-gate-daemon.sh
+# O daemon roda como root porque precisa poder executar qualquer comando aprovado, em qualquer
+# parte do filesystem. Instância única é garantida por flock mantido pelo PRÓPRIO script (fd 9,
+# ver topo de subot-gate-daemon.sh) — não por um wrapper 'flock <lockfile> <comando>' aqui no
+# ExecStart. Um wrapper externo faria o systemd rastrear o PID do wrapper como 'principal', e com
+# KillMode=process (abaixo) um restart mataria só o wrapper, deixando o daemon de verdade órfão
+# ainda segurando o lock (herdado por fork) — a próxima instância nunca mais conseguiria adquiri-lo
+# (foi exatamente isso que causou um crash loop em produção ao introduzir KillMode=process com o
+# wrapper antigo ainda no lugar).
+ExecStart=/opt/subot-gate/bin/subot-gate-daemon.sh
 Restart=on-failure
 RestartSec=5
+# KillMode=process (não o padrão 'control-group'): execute_approved() forka a execução do comando
+# aprovado em background, fora do loop principal, pra não bloquear o polling enquanto um comando
+# demorado roda. Com 'control-group', um stop/restart deste serviço (inclusive um restart feito só
+# pra destravar o próprio loop) mata esse subshell junto — o comando já aprovado por um humano
+# morre no meio, antes de chamar write_response/logar 'executed', e fica órfão em 'approved' pra
+# sempre (reconcile_on_startup não cobre esse caso). 'process' mata só o processo principal do
+# loop (agora corretamente o próprio script, não um wrapper); a execução aprovada em andamento
+# sobrevive ao restart e ainda consegue reportar o resultado.
+KillMode=process
 UMask=0077
 NoNewPrivileges=yes
 PrivateTmp=yes

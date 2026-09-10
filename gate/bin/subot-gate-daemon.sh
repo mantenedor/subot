@@ -288,6 +288,22 @@ reconcile_on_startup() {
     done
 }
 
+has_pending() {
+    # 'getUpdates' é um recurso compartilhado entre hosts (mesmo token de bot) — dois hosts
+    # pollando ao mesmo tempo colidem (409) e, pior, o offset é global: um host pode consumir do
+    # Telegram um clique de aprovação destinado a OUTRO host sem perceber (não reconhece o
+    # request_id, ignora em silêncio) e esse clique nunca mais chega a quem devia. Evitar essa
+    # sobreposição entre hosts é responsabilidade do bastião (serializar quem dispara um pedido
+    # de escalação por vez); a mitigação daqui é só reduzir a JANELA de exposição: só pollamos o
+    # Telegram enquanto este host tem um pedido de fato pendente, nunca em repouso.
+    local sf
+    for sf in "$STATE_DIR"/*.state; do
+        [ -e "$sf" ] || continue
+        grep -q '^status=pending' "$sf" && return 0
+    done
+    return 1
+}
+
 touch "$OFFSET_FILE" 2>/dev/null || echo 0 > "$OFFSET_FILE"
 reconcile_on_startup
 last_purge=0
@@ -300,25 +316,31 @@ while true; do
         send_notification "$id"
     done
 
-    offset="$(cat "$OFFSET_FILE" 2>/dev/null || echo 0)"
-    if updates="$(curl -fsS "$API/getUpdates?timeout=15&offset=${offset}&allowed_updates=%5B%22callback_query%22%5D")"; then
-        :
-    else
-        # getUpdates falhou (rede, API fora do ar, token inválido): evita spin/martelar a API —
-        # o 'timeout=15' do long-poll só protege o caminho feliz, não o de erro.
-        updates='{"result":[]}'
-        sleep 5
-    fi
-    while IFS= read -r row; do
-        [ -n "$row" ] || continue
-        update_id="$(jq -r '.update_id' <<<"$row")"
-        echo "$(( update_id + 1 ))" > "$OFFSET_FILE"
-        if jq -e '.callback_query' >/dev/null 2>&1 <<<"$row"; then
-            handle_callback "$row"
+    if has_pending; then
+        offset="$(cat "$OFFSET_FILE" 2>/dev/null || echo 0)"
+        if updates="$(curl -fsS "$API/getUpdates?timeout=15&offset=${offset}&allowed_updates=%5B%22callback_query%22%5D")"; then
+            :
+        else
+            # getUpdates falhou (rede, API fora do ar, token inválido): evita spin/martelar a API —
+            # o 'timeout=15' do long-poll só protege o caminho feliz, não o de erro.
+            updates='{"result":[]}'
+            sleep 5
         fi
-    done < <(jq -c '.result[]?' <<<"$updates")
+        while IFS= read -r row; do
+            [ -n "$row" ] || continue
+            update_id="$(jq -r '.update_id' <<<"$row")"
+            echo "$(( update_id + 1 ))" > "$OFFSET_FILE"
+            if jq -e '.callback_query' >/dev/null 2>&1 <<<"$row"; then
+                handle_callback "$row"
+            fi
+        done < <(jq -c '.result[]?' <<<"$updates")
 
-    check_timeouts
+        check_timeouts
+    else
+        # Nada pendente: não toca no Telegram, só observa REQ_DIR (loop de cima) até aparecer um
+        # pedido novo — ver has_pending() acima sobre por que evitar poll contínuo aqui.
+        sleep 1
+    fi
 
     now="$(date +%s)"
     if [ "$(( now - last_purge ))" -ge 3600 ]; then

@@ -13,9 +13,13 @@ Toda chamada é sempre registrada em auditoria (sucesso, bloqueio, motivo penden
 """
 from __future__ import annotations
 
+import fcntl
+import os
 import re
 import shlex
+from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 
 import paramiko
 
@@ -23,6 +27,28 @@ from . import audit, secrets
 from .confirm import ConfirmationStore, PendingAction
 from .inventory import Host, Inventory
 from .policy import Decision, PolicyEngine, Risk
+
+# Serializa, em toda a frota, o disparo do gate (aprovação humana via Telegram): 'getUpdates' é um
+# recurso compartilhado por token de bot entre hosts — dois pedidos de aprovação em voo ao mesmo
+# tempo em hosts diferentes fariam os respectivos daemons colidirem (409) e, pior, o offset do
+# Telegram é global, então um host pode consumir sem perceber um clique de aprovação destinado a
+# outro (ver gate/bin/subot-gate-daemon.sh::has_pending). flock (não threading.Lock) porque precisa
+# valer entre processos/sessões diferentes do bastião — cada sessão do MCP server é um processo
+# próprio —, não só dentro de uma chamada concorrente na mesma sessão.
+# Mesma pasta que SUBOT_CONFIRM_STORE (ver confirm.py) — é o único subdiretório de /opt/subot/data
+# com dono 'subot' (o resto é root:root), então é onde este processo de fato consegue escrever.
+_GATE_TRIGGER_LOCK_PATH = Path(os.environ.get("SUBOT_GATE_TRIGGER_LOCK", "/opt/subot/data/audit/.gate_trigger.lock"))
+
+
+@contextmanager
+def _gate_trigger_lock():
+    _GATE_TRIGGER_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with _GATE_TRIGGER_LOCK_PATH.open("a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 
 
 @dataclass
@@ -173,7 +199,8 @@ class SSHGateway:
             # uma sessão SSH não-interativa/não-login — não fonte .bashrc/.profile, então PATH
             # pode não incluir /usr/local/bin dependendo da configuração do sshd/shell do host.
             gate_cmd = f"/usr/local/bin/subot-gate-request {shlex.quote(command)} {shlex.quote(reason)}"
-            exit_code, out, err = self._run(client, gate_cmd, timeout=350)
+            with _gate_trigger_lock():
+                exit_code, out, err = self._run(client, gate_cmd, timeout=350)
             audit.record("ssh_exec", actor=actor, risk=risk.value, status="executed",
                          detail={**payload, "reason": reason, "exit_code": exit_code, "via": "gate"})
             return ExecResult(status="executed", exit_code=exit_code, stdout=out, stderr=err, via="gate")

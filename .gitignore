@@ -22,6 +22,15 @@ data/**
 domain/**/host.yaml
 domain/**/role.json
 
+# tudo que vive dentro de um domínio/cliente gerenciado específico (domain/<domínio>/...) é dado
+# de ambiente, nunca ferramenta — inclui procedimentos, documentos, e qualquer outra categoria que
+# venha a existir por domínio (ex.: domain/ogbrasil/procedimentos/infra/local/...). Mesmo princípio
+# do host.yaml/role.json acima, só que para o subtree inteiro; domain/README.md (a única coisa
+# rastreada dentro de domain/) fica de fora por estar direto na raiz, não sob um domínio. Cada
+# domínio deve ter seu próprio versionamento local separado (git próprio, sem remote) se precisar
+# de histórico de mudanças — nunca o git deste repositório.
+domain/*/
+
 # identidade padrão da IA nos hosts geridos (usuário, chave, sudoers-base) — o .example é que
 # fica versionado
 ia/policy/managed-identity.json

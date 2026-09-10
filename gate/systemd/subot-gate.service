@@ -16,14 +16,12 @@ Type=simple
 ExecStart=/opt/subot-gate/bin/subot-gate-daemon.sh
 Restart=on-failure
 RestartSec=5
-# KillMode=process (não o padrão 'control-group'): execute_approved() forka a execução do comando
-# aprovado em background, fora do loop principal, pra não bloquear o polling enquanto um comando
-# demorado roda. Com 'control-group', um stop/restart deste serviço (inclusive um restart feito só
-# pra destravar o próprio loop) mata esse subshell junto — o comando já aprovado por um humano
-# morre no meio, antes de chamar write_response/logar 'executed', e fica órfão em 'approved' pra
-# sempre (reconcile_on_startup não cobre esse caso). 'process' mata só o processo principal do
-# loop (agora corretamente o próprio script, não um wrapper); a execução aprovada em andamento
-# sobrevive ao restart e ainda consegue reportar o resultado.
+# KillMode=process (não o padrão 'control-group', que mataria todo o cgroup incl. processos
+# filhos que 'bash -c "$cmd"' venha a criar). execute_approved() roda EM LINHA no processo do
+# próprio daemon (sem fork em background) de propósito — evita dois comandos aprovados rodando
+# concorrentemente, ao custo de um restart no meio de uma execução matar o comando em andamento
+# (fica órfão em 'approved', reconcile_on_startup não cobre esse caso; é um custo aceito
+# conscientemente, não um bug — ver subot-gate-daemon.sh::execute_approved).
 KillMode=process
 UMask=0077
 NoNewPrivileges=yes

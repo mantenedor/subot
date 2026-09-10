@@ -154,21 +154,25 @@ write_response() {  # $1=id $2=status $3=exit_code $4=stdout $5=stderr
 }
 
 execute_approved() {  # $1=request_id $2=decided_by_id (numérico)
-    local id="$1" decided_by="$2"
-    (
-        local cmd out err ec errfile
-        cmd="$(grep -m1 '^command_b64=' "$PROC_DIR/$id" | cut -d= -f2- | base64 -d)"
-        errfile="$(mktemp)"
-        if out="$(bash -c "$cmd" 2>"$errfile")"; then
-            ec=0
-        else
-            ec=$?
-        fi
-        err="$(cat "$errfile")"
-        rm -f "$errfile"
-        write_response "$id" approved "$ec" "$out" "$err"
-        audit executed "$id" "{\"exit_code\":$ec,\"decided_by\":$decided_by}"
-    ) &
+    # Roda em linha, no processo do próprio daemon — SEM '(...) &' — de propósito: comandos
+    # aprovados nunca devem se sobrepor. Um fork em background permitiria dois comandos aprovados
+    # em sequência rápida rodarem ao mesmo tempo (ex.: dois 'docker compose' mexendo no mesmo
+    # recurso), sem nenhum mecanismo neste gate para serializar isso — risco que não assumimos.
+    # Custo aceito conscientemente: um comando aprovado demorado bloqueia o polling/novas
+    # notificações até terminar, e um restart do serviço no meio de uma execução mata o comando
+    # (perde a resiliência a restart que o fork em background tinha — ver systemd/subot-gate.service).
+    local id="$1" decided_by="$2" cmd out err ec errfile
+    cmd="$(grep -m1 '^command_b64=' "$PROC_DIR/$id" | cut -d= -f2- | base64 -d)"
+    errfile="$(mktemp)"
+    if out="$(bash -c "$cmd" 2>"$errfile")"; then
+        ec=0
+    else
+        ec=$?
+    fi
+    err="$(cat "$errfile")"
+    rm -f "$errfile"
+    write_response "$id" approved "$ec" "$out" "$err"
+    audit executed "$id" "{\"exit_code\":$ec,\"decided_by\":$decided_by}"
 }
 
 handle_callback() {  # $1=update json (contém .callback_query)

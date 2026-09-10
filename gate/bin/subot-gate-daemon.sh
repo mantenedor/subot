@@ -159,8 +159,11 @@ execute_approved() {  # $1=request_id $2=decided_by_id (numérico)
         local cmd out err ec errfile
         cmd="$(grep -m1 '^command_b64=' "$PROC_DIR/$id" | cut -d= -f2- | base64 -d)"
         errfile="$(mktemp)"
-        out="$(bash -c "$cmd" 2>"$errfile")"
-        ec=$?
+        if out="$(bash -c "$cmd" 2>"$errfile")"; then
+            ec=0
+        else
+            ec=$?
+        fi
         err="$(cat "$errfile")"
         rm -f "$errfile"
         write_response "$id" approved "$ec" "$out" "$err"

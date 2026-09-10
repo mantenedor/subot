@@ -214,7 +214,11 @@ fi
 # Passo interativo por natureza (não há como "digitar" token/chat_id sem terminal) — diferente dos
 # outros blocos, SUBOT_GATE_ASSUME_YES sem tty não tenta ler nada: vai direto pro template, sem
 # travar num 'read' que nunca teria como ser respondido.
-if [ ! -f /opt/subot-gate/etc/telegram.env ]; then
+if [ -f /opt/subot-gate/etc/telegram.env ] && [ ! -f /opt/subot-gate/etc/.env ]; then
+    echo "==> migrando /opt/subot-gate/etc/telegram.env -> .env (mesmo conteúdo/permissões)"
+    mv /opt/subot-gate/etc/telegram.env /opt/subot-gate/etc/.env
+fi
+if [ ! -f /opt/subot-gate/etc/.env ]; then
     if have_tty && confirm "configurar credenciais do Telegram agora (token, chat_id, IDs autorizados)"; then
         read -r -p "    TELEGRAM_BOT_TOKEN: " TG_TOKEN < /dev/tty
         read -r -p "    TELEGRAM_CHAT_ID: " TG_CHAT < /dev/tty
@@ -222,27 +226,27 @@ if [ ! -f /opt/subot-gate/etc/telegram.env ]; then
         echo "    confirme: chat_id=${TG_CHAT}, authorized_ids=${TG_IDS}, token=${TG_TOKEN:0:6}...(oculto)"
         read -r -p "    gravar? [Enter]=sim, s=pular : " ans < /dev/tty
         if [ "${ans:-}" != "s" ]; then
-            install -m 0600 -o root -g root /dev/null /opt/subot-gate/etc/telegram.env
+            install -m 0600 -o root -g root /dev/null /opt/subot-gate/etc/.env
             {
                 printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TG_TOKEN"
                 printf 'TELEGRAM_CHAT_ID=%s\n' "$TG_CHAT"
                 printf 'TELEGRAM_AUTHORIZED_IDS=%s\n' "$TG_IDS"
                 printf 'TIMEOUT_SECONDS=300\n'
                 printf 'TELEGRAM_API_BASE=https://api.telegram.org\n'
-            } > /opt/subot-gate/etc/telegram.env
+            } > /opt/subot-gate/etc/.env
         else
-            install -m 0600 -o root -g root etc/telegram.env.example /opt/subot-gate/etc/telegram.env
-            echo "    template gravado sem preencher — edite /opt/subot-gate/etc/telegram.env manualmente."
+            install -m 0600 -o root -g root etc/.env.example /opt/subot-gate/etc/.env
+            echo "    template gravado sem preencher — edite /opt/subot-gate/etc/.env manualmente."
         fi
     else
-        install -m 0600 -o root -g root etc/telegram.env.example /opt/subot-gate/etc/telegram.env
-        echo "    template gravado — edite /opt/subot-gate/etc/telegram.env manualmente antes de iniciar o serviço."
+        install -m 0600 -o root -g root etc/.env.example /opt/subot-gate/etc/.env
+        echo "    template gravado — edite /opt/subot-gate/etc/.env manualmente antes de iniciar o serviço."
     fi
 else
-    echo "==> /opt/subot-gate/etc/telegram.env já existe, mantendo"
+    echo "==> /opt/subot-gate/etc/.env já existe, mantendo"
 fi
-chmod 0600 /opt/subot-gate/etc/telegram.env
-chown root:root /opt/subot-gate/etc/telegram.env
+chmod 0600 /opt/subot-gate/etc/.env
+chown root:root /opt/subot-gate/etc/.env
 
 # --- 9. systemd -----------------------------------------------------------------------------------
 if confirm "instalar e habilitar o serviço systemd 'subot-gate'"; then
@@ -268,6 +272,6 @@ else
 fi
 
 echo ""
-echo "==> instalação concluída. Se telegram.env não foi preenchido acima, edite"
-echo "    /opt/subot-gate/etc/telegram.env e rode: systemctl start subot-gate"
+echo "==> instalação concluída. Se .env não foi preenchido acima, edite"
+echo "    /opt/subot-gate/etc/.env e rode: systemctl start subot-gate"
 echo "    Depois valide com: sudo -l -U ${IDENTITY_USERNAME}   (mostra só o que estiver no manifesto)"

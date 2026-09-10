@@ -1,9 +1,9 @@
 # gate/etc
 
-`telegram.env` (gerado a partir de `telegram.env.example` por `install-gate.sh`, nunca versionado)
+`.env` (gerado a partir de `.env.example` por `install-gate.sh`, nunca versionado)
 guarda `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` e `TELEGRAM_AUTHORIZED_IDS` — os únicos segredos
 do gate de escalação de privilégio (`../bin/subot-gate-daemon.sh`). Vive em
-`/opt/subot-gate/etc/telegram.env`, `root:root 0600`, no host gerenciado.
+`/opt/subot-gate/etc/.env`, `root:root 0600`, no host gerenciado.
 
 ## Modelo de ameaça: o que essa permissão protege, e o que ela não protege
 
@@ -13,7 +13,7 @@ segurança" do README principal e `packages/subot_core/subot_core/confirm.py`, c
 confirmação em duas etapas, self-servível pela própria IA no mesmo container, foi o motivo de criar
 este gate separado). Para essa ameaça específica, `root:root 0600` já é
 suficiente e foi validado na prática: `subot` recebe `Permission denied` tentando ler
-`telegram.env` ou o próprio `subot-gate-daemon.sh` — a IA não tem como ler o segredo nem reescrever
+`.env` ou o próprio `subot-gate-daemon.sh` — a IA não tem como ler o segredo nem reescrever
 a lógica de decisão.
 
 **O que um `TELEGRAM_BOT_TOKEN` vazado permite de fato** (menos grave do que parece à primeira
@@ -29,7 +29,7 @@ o token vazado realmente habilita:
 - mandar mensagens como o bot naquele chat (ruído/engenharia social — não aprovação).
 
 **O que essa permissão de arquivo não protege, e nada baseado só em arquivo local protegeria**:
-alguém com **root** no host gerenciado lê `telegram.env` direto, mas se já tem root não precisa do
+alguém com **root** no host gerenciado lê `.env` direto, mas se já tem root não precisa do
 token pra nada — pode rodar o comando privilegiado sozinho, matar o daemon, ou escrever a resposta
 "approved" à mão. Isso é a mesma limitação, já reconhecida no README principal (seção "Controles de
 segurança"), da própria chave SSH privada do bastião: "não protege contra alguém com root no host
@@ -46,5 +46,5 @@ o modelo de ameaça mudar (ex.: hosts gerenciados com backup para local não con
 preocupação real com comprometimento de root por outra via).
 
 Se o token for suspeito de vazamento: revogue no @BotFather (`/revoke`), gere um novo, atualize
-`telegram.env` e reinicie `subot-gate.service` — não existe (ainda) um script de rotação
+`.env` e reinicie `subot-gate.service` — não existe (ainda) um script de rotação
 automatizado equivalente a `scripts/rotate-ssh-keys.sh`.

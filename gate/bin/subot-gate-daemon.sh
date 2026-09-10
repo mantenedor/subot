@@ -16,12 +16,12 @@ exec 9>/run/subot-gate.lock
 flock -n 9 || { echo "subot-gate-daemon: já existe uma instância rodando (lock /run/subot-gate.lock ocupado)." >&2; exit 1; }
 
 BASE=/opt/subot-gate
-# shellcheck source=/opt/subot-gate/etc/telegram.env
-source "$BASE/etc/telegram.env"
+# shellcheck source=/opt/subot-gate/etc/.env
+source "$BASE/etc/.env"
 
-: "${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN não definido em telegram.env}"
-: "${TELEGRAM_CHAT_ID:?TELEGRAM_CHAT_ID não definido em telegram.env}"
-: "${TELEGRAM_AUTHORIZED_IDS:?TELEGRAM_AUTHORIZED_IDS não definido em telegram.env (chat é um grupo — allowlist é obrigatória)}"
+: "${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN não definido em .env}"
+: "${TELEGRAM_CHAT_ID:?TELEGRAM_CHAT_ID não definido em .env}"
+: "${TELEGRAM_AUTHORIZED_IDS:?TELEGRAM_AUTHORIZED_IDS não definido em .env (chat é um grupo — allowlist é obrigatória)}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-300}"
 API="${TELEGRAM_API_BASE:-https://api.telegram.org}/bot${TELEGRAM_BOT_TOKEN}"
 

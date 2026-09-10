@@ -8,7 +8,7 @@ set -euo pipefail
 
 REQ_DIR=/opt/subot-gate/var/requests
 RESP_DIR=/opt/subot-gate/var/responses
-# Deve ser MAIOR que TIMEOUT_SECONDS do daemon (telegram.env) + folga de rede — senão o cliente
+# Deve ser MAIOR que TIMEOUT_SECONDS do daemon (.env) + folga de rede — senão o cliente
 # desiste antes do próprio fail-closed do servidor ter chance de responder "timeout".
 CLIENT_WAIT_SECONDS="${SUBOT_GATE_CLIENT_WAIT:-330}"
 

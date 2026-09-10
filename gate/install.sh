@@ -44,7 +44,7 @@ else
     WORKDIR="$(mktemp -d)"
     trap 'rm -rf "$WORKDIR"' EXIT
     for f in install-gate.sh bin/subot-gate-daemon.sh bin/subot-gate-request.sh \
-             bin/apply-sudoers-policy.sh etc/telegram.env.example systemd/subot-gate.service; do
+             bin/apply-sudoers-policy.sh etc/.env.example systemd/subot-gate.service; do
         mkdir -p "$WORKDIR/$(dirname "$f")"
         curl -fsSL "$BASE_URL/$f" -o "$WORKDIR/$f"
     done

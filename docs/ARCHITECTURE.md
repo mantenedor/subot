@@ -202,7 +202,7 @@ gerenciado**, fora do container do agent, com o cliente (`subot-gate-request.sh`
 `bin/subot-gate-request.sh:1`) só conseguindo registrar um pedido no spool e esperar — nunca
 decidir sozinho.
 
-**Modelo de ameaça, segredo do Telegram e o que a permissão `0600` de `telegram.env` protege (e o
+**Modelo de ameaça, segredo do Telegram e o que a permissão `0600` de `.env` protege (e o
 que não protege)**: ver `gate/etc/README.md`.
 
 **Instalação:** ver [Instalando o gate de privilégio](#instalando-o-gate-de-privilégio-no-host-gerenciado)

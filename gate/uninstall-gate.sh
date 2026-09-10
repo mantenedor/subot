@@ -14,7 +14,7 @@ systemctl disable subot-gate.service 2>/dev/null || true
 rm -f /etc/systemd/system/subot-gate.service
 systemctl daemon-reload
 
-echo "==> removendo binários e estado (mantém nada — inclusive telegram.env e a auditoria!)"
+echo "==> removendo binários e estado (mantém nada — inclusive .env e a auditoria!)"
 read -r -p "isso apaga /opt/subot-gate inteiro, incluindo a auditoria local (gate-audit.jsonl). confirma? [y/N] " ans
 if [ "${ans:-N}" = "y" ] || [ "${ans:-N}" = "Y" ]; then
     rm -rf /opt/subot-gate

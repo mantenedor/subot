@@ -25,3 +25,8 @@ sensitive_patterns:
   - "apt-get update*"
   - "apt-get upgrade*"
   - "re:^kill -[0-9]+ .*"
+  - "docker compose run*"
+  - "docker exec*"
+  - "docker logs*"
+  - "docker top*"
+  - "docker inspect*"
